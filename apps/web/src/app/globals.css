@@ -1,0 +1,457 @@
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&family=Noto+Sans+Devanagari:wght@300;400;500;600;700&family=Noto+Sans+Tamil:wght@300;400;500;600;700&family=Noto+Sans+Bengali:wght@300;400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ============================================================
+   PocketJury — Global Styles & Design Tokens
+   ============================================================ */
+
+@layer base {
+  /* Noto Sans font family for multilingual support (loaded via @import at top of file) */
+
+  :root {
+    --color-primary: #1B3A5C;
+    --color-primary-light: #E8EDF3;
+    --color-secondary: #2E7D32;
+    --color-accent: #E65100;
+    --color-bg: #F8FAFC;
+    --color-surface: #FFFFFF;
+    --color-surface-elevated: #F1F5F9;
+    --color-text-primary: #0F172A;
+    --color-text-secondary: #475569;
+    --color-text-muted: #94A3B8;
+    --color-border: #E2E8F0;
+    --color-error: #DC2626;
+    --color-success: #16A34A;
+    --color-warning: #D97706;
+    --radius-sm: 4px;
+    --radius-md: 8px;
+    --radius-lg: 12px;
+  }
+
+  .dark {
+    --color-primary: #60A5FA;
+    --color-primary-light: #1E3A5F;
+    --color-bg: #0F172A;
+    --color-surface: #1E293B;
+    --color-surface-elevated: #334155;
+    --color-text-primary: #F1F5F9;
+    --color-text-secondary: #CBD5E1;
+    --color-text-muted: #64748B;
+    --color-border: #334155;
+  }
+
+  html {
+    scroll-behavior: smooth;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  body {
+    background-color: var(--color-bg);
+    color: var(--color-text-primary);
+    font-family: var(--font-noto-sans, 'Noto Sans'), 'system-ui', sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    transition: background-color 0.3s ease, color 0.3s ease;
+  }
+
+  /* Smooth theme transitions on all elements */
+  *,
+  *::before,
+  *::after {
+    transition: background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+  }
+
+  /* Disable transition on motion-animated elements to prevent interference */
+  [data-motion],
+  [style*="transform"] {
+    transition: none;
+  }
+
+  /* Focus styles for accessibility */
+  *:focus-visible {
+    @apply outline-2 outline-offset-2 outline-blue-500 rounded-sm;
+  }
+
+  /* Remove default focus for non-keyboard interactions */
+  *:focus:not(:focus-visible) {
+    outline: none;
+  }
+}
+
+@layer components {
+
+  /* --- Button Variants --- */
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-[var(--radius-md)] px-4 py-2.5 text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed active:scale-[0.98];
+    transition: background-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease, transform 0.1s ease;
+  }
+
+  .btn-primary {
+    @apply btn bg-primary-500 text-white shadow-sm;
+  }
+
+  .btn-primary:hover {
+    @apply bg-primary-600 shadow-md;
+  }
+
+  .dark .btn-primary {
+    @apply bg-blue-600 text-white;
+  }
+
+  .dark .btn-primary:hover {
+    @apply bg-blue-500;
+  }
+
+  .btn-secondary {
+    @apply btn bg-secondary-500 text-white;
+  }
+
+  .btn-secondary:hover {
+    @apply bg-secondary-600;
+  }
+
+  .btn-accent {
+    @apply btn bg-accent-500 text-white;
+  }
+
+  .btn-accent:hover {
+    @apply bg-accent-600;
+  }
+
+  .btn-outline {
+    @apply btn border bg-transparent;
+    border-color: var(--color-border);
+    color: var(--color-text-primary);
+  }
+
+  .btn-outline:hover {
+    background-color: var(--color-surface-elevated);
+  }
+
+  .btn-ghost {
+    @apply btn bg-transparent;
+    color: var(--color-text-secondary);
+  }
+
+  .btn-ghost:hover {
+    background-color: var(--color-surface-elevated);
+  }
+
+  .btn-danger {
+    @apply btn bg-red-600 text-white;
+  }
+
+  .btn-danger:hover {
+    @apply bg-red-700;
+  }
+
+  .btn-sm {
+    @apply px-3 py-1.5 text-xs;
+  }
+
+  .btn-lg {
+    @apply px-6 py-3 text-base;
+  }
+
+  .btn-icon {
+    @apply btn p-2 rounded-[var(--radius-md)];
+  }
+
+  /* --- Input --- */
+  .input {
+    @apply w-full rounded-[var(--radius-md)] border px-3 py-2.5 text-sm;
+    background-color: var(--color-surface);
+    border-color: var(--color-border);
+    color: var(--color-text-primary);
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  }
+
+  .input::placeholder {
+    color: var(--color-text-muted);
+  }
+
+  .input:focus {
+    @apply border-blue-500 ring-1 ring-blue-500;
+  }
+
+  .input-error {
+    @apply border-red-500 focus:border-red-500 focus:ring-red-500;
+  }
+
+  /* --- Card --- */
+  .card {
+    @apply rounded-[var(--radius-lg)] border p-4 shadow-sm;
+    background-color: var(--color-surface);
+    border-color: var(--color-border);
+  }
+
+  .card-elevated {
+    @apply card shadow-md;
+    transition: box-shadow 0.2s ease;
+  }
+
+  .card-elevated:hover {
+    @apply shadow-lg;
+  }
+
+  /* --- Chat Bubbles --- */
+  .chat-bubble-user {
+    @apply rounded-[var(--radius-lg)] rounded-br-[var(--radius-sm)] px-4 py-3 max-w-[100%] w-fit ml-auto animate-slide-up;
+    background-color: #1B3A5C;
+    color: white;
+    overflow-wrap: break-word;
+    word-break: normal;
+  }
+
+  .dark .chat-bubble-user {
+    background-color: #3B82F6;
+  }
+
+  .chat-bubble-assistant {
+    @apply rounded-[var(--radius-lg)] rounded-bl-[var(--radius-sm)] px-4 py-3 max-w-[85%] w-fit animate-slide-up;
+    background-color: var(--color-surface-elevated);
+    color: var(--color-text-primary);
+    overflow-wrap: break-word;
+    word-break: normal;
+  }
+
+  /* --- Typing Indicator --- */
+  .typing-indicator {
+    @apply flex items-center gap-1 p-3;
+  }
+
+  .typing-dot {
+    @apply w-2 h-2 rounded-full animate-pulse-dot;
+    background-color: var(--color-text-muted);
+  }
+
+  .typing-dot:nth-child(2) {
+    animation-delay: 0.2s;
+  }
+
+  .typing-dot:nth-child(3) {
+    animation-delay: 0.4s;
+  }
+
+  /* --- Badge --- */
+  .badge {
+    @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium;
+  }
+
+  .badge-primary {
+    @apply badge;
+    background-color: var(--color-primary-light);
+    color: var(--color-primary);
+  }
+
+  .badge-success {
+    @apply badge bg-green-100 text-green-800;
+  }
+
+  .dark .badge-success {
+    @apply bg-green-900/50 text-green-300;
+  }
+
+  .badge-warning {
+    @apply badge bg-amber-100 text-amber-800;
+  }
+
+  .dark .badge-warning {
+    @apply bg-amber-900/50 text-amber-300;
+  }
+
+  .badge-danger {
+    @apply badge bg-red-100 text-red-800;
+  }
+
+  .dark .badge-danger {
+    @apply bg-red-900/50 text-red-300;
+  }
+
+  .badge-info {
+    @apply badge bg-blue-100 text-blue-800;
+  }
+
+  .dark .badge-info {
+    @apply bg-blue-900/50 text-blue-300;
+  }
+
+  .badge-secondary {
+    @apply badge bg-green-100 text-green-800;
+  }
+
+  .dark .badge-secondary {
+    @apply bg-green-900/50 text-green-300;
+  }
+
+  /* --- Scrollbar --- */
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-text-muted) transparent;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    background-color: var(--color-text-muted);
+    border-radius: 3px;
+  }
+
+  /* Alias for backward compatibility */
+  .custom-scrollbar {
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-text-muted) transparent;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    background-color: var(--color-text-muted);
+    border-radius: 3px;
+  }
+
+  /* --- Disclaimer Banner --- */
+  .disclaimer-banner {
+    @apply rounded-[var(--radius-md)] px-4 py-3 text-sm flex items-center gap-2;
+    background-color: #FFFBEB;
+    border: 1px solid #FDE68A;
+    color: #92400E;
+  }
+
+  .dark .disclaimer-banner {
+    background-color: rgba(120, 53, 15, 0.2);
+    border-color: rgba(217, 119, 6, 0.3);
+    color: #FCD34D;
+  }
+
+  /* --- Helpline Card --- */
+  .helpline-card {
+    @apply card border-l-4 border-l-accent-500;
+  }
+
+  /* --- Source Reference --- */
+  .source-ref {
+    @apply card border-l-4 border-l-secondary-500 text-sm;
+    background-color: var(--color-surface-elevated);
+  }
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+
+  .safe-area-inset-bottom {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  .safe-area-inset-top {
+    padding-top: env(safe-area-inset-top, 0px);
+  }
+
+  /* Theme-aware text helpers */
+  .text-heading {
+    color: var(--color-text-primary);
+  }
+
+  .text-body {
+    color: var(--color-text-secondary);
+  }
+
+  .text-muted {
+    color: var(--color-text-muted);
+  }
+
+  /* Theme-aware background helpers */
+  .bg-page {
+    background-color: var(--color-bg);
+  }
+
+  .bg-card {
+    background-color: var(--color-surface);
+  }
+
+  .bg-elevated {
+    background-color: var(--color-surface-elevated);
+  }
+}
+
+/* --- Markdown Content Styles --- */
+.markdown-content h1 {
+  @apply text-2xl font-bold mt-6 mb-3;
+  color: var(--color-text-primary);
+}
+
+.markdown-content h2 {
+  @apply text-xl font-semibold mt-5 mb-2;
+  color: var(--color-text-primary);
+}
+
+.markdown-content h3 {
+  @apply text-lg font-semibold mt-4 mb-2;
+  color: var(--color-text-primary);
+}
+
+.markdown-content p {
+  @apply mb-3 leading-relaxed;
+  color: var(--color-text-secondary);
+}
+
+.markdown-content ul {
+  @apply list-disc pl-6 mb-3 space-y-1;
+}
+
+.markdown-content ol {
+  @apply list-decimal pl-6 mb-3 space-y-1;
+}
+
+.markdown-content li {
+  @apply leading-relaxed;
+  color: var(--color-text-secondary);
+}
+
+.markdown-content strong {
+  @apply font-semibold;
+  color: var(--color-text-primary);
+}
+
+.markdown-content blockquote {
+  @apply border-l-4 pl-4 italic my-3;
+  border-color: var(--color-border);
+  color: var(--color-text-secondary);
+}
+
+.markdown-content code {
+  @apply px-1.5 py-0.5 rounded text-sm font-mono;
+  background-color: var(--color-surface-elevated);
+  color: var(--color-text-primary);
+}
+
+.markdown-content a {
+  @apply underline;
+  color: var(--color-primary);
+}
+
+.markdown-content a:hover {
+  opacity: 0.8;
+}
+
+.markdown-content hr {
+  @apply my-4;
+  border-color: var(--color-border);
+}

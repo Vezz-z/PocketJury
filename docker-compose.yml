@@ -1,0 +1,124 @@
+# ==============================================================================
+# PocketJury — Docker Compose (Development)
+# ==============================================================================
+
+services:
+  # ---------- PostgreSQL 16 + pgvector ----------
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: pocketjury-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: pocketjury
+      POSTGRES_USER: pocketjury
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-pocketjury_dev_2024}
+    ports:
+      - '5432:5432'
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: [ 'CMD-SHELL', 'pg_isready -U pocketjury' ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ---------- Redis 7 ----------
+  redis:
+    image: redis:7-alpine
+    container_name: pocketjury-redis
+    restart: unless-stopped
+    command: redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru
+    ports:
+      - '6379:6379'
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: [ 'CMD', 'redis-cli', 'ping' ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ---------- API Gateway (Express) ----------
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    container_name: pocketjury-api
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      NODE_ENV: development
+      PORT: 4000
+      DATABASE_URL: postgresql://pocketjury:${POSTGRES_PASSWORD:-pocketjury_dev_2024}@postgres:5432/pocketjury
+      REDIS_URL: redis://redis:6379
+      JWT_PUBLIC_KEY: ${JWT_PUBLIC_KEY}
+      JWT_PRIVATE_KEY: ${JWT_PRIVATE_KEY}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY}
+      AI_SERVICE_URL: http://ai:8000
+      CORS_ORIGINS: http://localhost:3000
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-placeholder}
+      SENTRY_DSN: ${SENTRY_DSN:-}
+    ports:
+      - '4000:4000'
+    volumes:
+      - ./apps/api/src:/app/src
+      - ./packages/shared:/app/packages/shared
+
+  # ---------- AI Service (FastAPI) ----------
+  ai:
+    build:
+      context: .
+      dockerfile: services/ai/Dockerfile
+    container_name: pocketjury-ai
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      ENVIRONMENT: development
+      DATABASE_URL: postgresql+asyncpg://pocketjury:${POSTGRES_PASSWORD:-pocketjury_dev_2024}@postgres:5432/pocketjury
+      REDIS_URL: redis://redis:6379
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+      LLM_MODEL_ID: ${LLM_MODEL_ID:-gpt-oss-120b:free}
+      LEGAL_EMBEDDING_MODEL: ${LEGAL_EMBEDDING_MODEL:-intfloat/multilingual-e5-large}
+      QUERY_EMBEDDING_MODEL: ${QUERY_EMBEDDING_MODEL:-intfloat/multilingual-e5-large}
+      HF_HOME: /app/model_cache
+      TRANSFORMERS_CACHE: /app/model_cache/hub
+      SENTRY_DSN: ${SENTRY_DSN:-}
+    ports:
+      - '8000:8000'
+    volumes:
+      - ./services/ai/app:/app/app
+      - model-cache:/app/model_cache
+    command: [ "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload", "--reload-dir", "/app/app" ]
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+
+  # ---------- Next.js Frontend ----------
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    container_name: pocketjury-web
+    restart: unless-stopped
+    depends_on:
+      - api
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:4000/api/v1
+    ports:
+      - '3000:3000'
+    volumes:
+      - ./apps/web/src:/app/src
+
+volumes:
+  pgdata:
+  redisdata:
+  model-cache:
