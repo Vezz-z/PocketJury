@@ -2,7 +2,6 @@
 # PocketJury — AI Service Tests (Ingestion Pipeline)
 # ==============================================================================
 
-import pytest
 from app.ingestion.pipeline import LegalTextChunker
 
 

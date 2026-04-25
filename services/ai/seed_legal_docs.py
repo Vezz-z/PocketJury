@@ -10,7 +10,6 @@ Usage:
 
 import asyncio
 import uuid
-from datetime import datetime, date
 
 import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession

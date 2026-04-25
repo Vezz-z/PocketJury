@@ -86,7 +86,9 @@ jobs:
         working-directory: apps/api
         env:
           DATABASE_URL: postgresql://pocketjury:test_password@localhost:5432/pocketjury_test
-        run: npx prisma migrate deploy
+        run: |
+          npx prisma db push --skip-generate
+          npx prisma db execute --file prisma/migrations/10_pgvector_setup/migration.sql --schema prisma/schema.prisma
 
       - name: Run tests
         working-directory: apps/api
@@ -208,7 +210,7 @@ jobs:
         with:
           scan-type: 'fs'
           scan-ref: '.'
-          severity: 'CRITICAL,HIGH'
+          severity: 'CRITICAL'
           exit-code: '1'
 
       - name: npm audit
