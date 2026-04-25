@@ -8,9 +8,7 @@ WORKDIR /app
 
 # Install dependencies — cached unless package.json or shared package changes
 FROM base AS deps
-COPY packages/shared/package.json ./packages/shared/package.json
-COPY packages/shared/tsconfig.json ./packages/shared/tsconfig.json
-COPY packages/shared/src ./packages/shared/src
+COPY packages/shared/package.json ./packages/shared/
 COPY apps/api/package.json apps/api/package-lock.json* ./
 RUN sed -i 's|"@pocketjury/shared": "\*"|"@pocketjury/shared": "file:./packages/shared"|' package.json
 RUN if [ -f package-lock.json ]; then npm ci --loglevel=error; else npm install --loglevel=error; fi
@@ -18,7 +16,11 @@ RUN if [ -f package-lock.json ]; then npm ci --loglevel=error; else npm install 
 # Build — only source code changes trigger this layer
 FROM base AS builder
 COPY --from=deps /app/node_modules ./node_modules
-COPY --from=deps /app/packages/shared ./packages/shared
+COPY --from=deps /app/packages/shared/package.json ./packages/shared/
+COPY --from=deps /app/package.json ./
+# Copy the source code for the shared package
+COPY packages/shared/tsconfig.json ./packages/shared/
+COPY packages/shared/src ./packages/shared/src
 # Build shared package first (run from /app so npx finds node_modules/.bin/tsc)
 RUN npx tsc -p packages/shared/tsconfig.json
 COPY apps/api/prisma ./prisma
