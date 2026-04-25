@@ -56,3 +56,16 @@ Thumbs.db
 # Project specific
 logs/
 *.log
+
+# Documentation & non-build files (reduce build context)
+docs/
+*.md
+LICENSE*
+monitoring/
+nginx/
+.github/
+jwt_private.pem
+jwt_public.pem
+test_payload.json
+turbo.json
+docker-compose*.yml

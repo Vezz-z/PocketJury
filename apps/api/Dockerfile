@@ -1,26 +1,30 @@
 # ==============================================================================
-# PocketJury API — Dockerfile (Multi-stage)
+# PocketJury API — Dockerfile (Multi-stage, Cache-optimized)
 # ==============================================================================
 
 FROM node:20-alpine AS base
 RUN apk add --no-cache libc6-compat
 WORKDIR /app
 
-# Install dependencies
+# Install dependencies — cached unless package.json or shared package changes
 FROM base AS deps
-COPY packages/shared/ ./packages/shared/
+COPY packages/shared/package.json ./packages/shared/package.json
+COPY packages/shared/tsconfig.json ./packages/shared/tsconfig.json
+COPY packages/shared/src ./packages/shared/src
 COPY apps/api/package.json apps/api/package-lock.json* ./
 RUN sed -i 's|"@pocketjury/shared": "\*"|"@pocketjury/shared": "file:./packages/shared"|' package.json
 RUN if [ -f package-lock.json ]; then npm ci --loglevel=error; else npm install --loglevel=error; fi
 
-# Build
+# Build — only source code changes trigger this layer
 FROM base AS builder
 COPY --from=deps /app/node_modules ./node_modules
 COPY --from=deps /app/packages/shared ./packages/shared
 # Build shared package first (run from /app so npx finds node_modules/.bin/tsc)
 RUN npx tsc -p packages/shared/tsconfig.json
-COPY apps/api/ .
+COPY apps/api/prisma ./prisma
 RUN npx prisma generate
+COPY apps/api/tsconfig.json apps/api/tsconfig.build.json* ./
+COPY apps/api/src ./src
 RUN npm run build
 
 # Production

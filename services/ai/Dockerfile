@@ -1,12 +1,11 @@
 # ==============================================================================
-# PocketJury AI Service — Dockerfile (Multi-stage)
+# PocketJury AI Service — Dockerfile (Multi-stage, Cache-optimized)
 # ==============================================================================
 
 FROM python:3.11-slim AS base
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    PIP_NO_CACHE_DIR=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1 \
     PIP_DEFAULT_TIMEOUT=300 \
     PIP_RETRIES=3
@@ -18,16 +17,25 @@ RUN apt-get update && \
     apt-get install -y --no-install-recommends gcc g++ libpq-dev && \
     rm -rf /var/lib/apt/lists/*
 
-# Install Python dependencies (CPU-only PyTorch — AI uses Bedrock, not local GPU)
+# Install Python dependencies — cached unless requirements.txt changes
+# NOTE: pip cache is enabled (no PIP_NO_CACHE_DIR) so that Docker BuildKit
+# cache mounts can speed up rebuilds when the layer IS invalidated.
 FROM base AS deps
 COPY services/ai/requirements.txt .
-RUN pip install --no-cache-dir --extra-index-url https://download.pytorch.org/whl/cpu -r requirements.txt
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install --extra-index-url https://download.pytorch.org/whl/cpu -r requirements.txt
 
-# Production image
+# Production image — only source code changes trigger this layer
 FROM base AS runner
 COPY --from=deps /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
 COPY --from=deps /usr/local/bin /usr/local/bin
-COPY services/ai/ .
+
+# Copy config files first (rarely change)
+COPY services/ai/pyproject.toml services/ai/requirements.txt ./
+
+# Copy application code (changes frequently — keep last)
+COPY services/ai/app ./app
+COPY services/ai/seed_legal_docs.py ./
 
 # Create non-root user with writable cache for HuggingFace models
 RUN addgroup --system --gid 1001 aiservice && \

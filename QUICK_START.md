@@ -138,15 +138,30 @@ LOG_LEVEL=debug
 ## 🐳 5. Booting the Full Stack via Docker
 
 Once your `.env` is saved and your `.pem` files are in the root directory, you are ready for liftoff.
-PocketJury utilizes heavily optimized multi-stage Dockerfiles caching via TurboRepo to build the entire suite at once.
+PocketJury utilizes cache-optimized multi-stage Dockerfiles to build the entire suite efficiently.
 
+### First-Time Build
 Run this command from the root directory:
 ```bash
 docker compose up --build -d
 ```
+> ⏱️ **First build** will take several minutes to download Python packages (~2GB for PyTorch + sentence-transformers) and Node modules. This is a one-time cost.
+
+### Subsequent Builds (After Code Changes)
+For everyday development, the Dockerfiles are optimized to **skip dependency installation** when only source code changes. Dependencies are only re-downloaded if `package.json` or `requirements.txt` are modified.
+
+```bash
+# Recommended: Rebuild only the service(s) you changed
+docker compose up --build -d api        # Only rebuild the API service
+docker compose up --build -d ai         # Only rebuild the AI service
+docker compose up --build -d web        # Only rebuild the Web frontend
+
+# Rebuild everything (still fast — cached deps are reused)
+docker compose up --build -d
+```
 
 ### What happens now?
-It will take a few minutes to download the Python requirements and Node modules. Once complete, Docker spins up:
+On first boot, Docker spins up:
 1. **`pocketjury-postgres`**: Boots the database, applies migrations, and automatically seeds the *Constitution of India* and *BNS 2023* semantic vectors for the AI to read. (Reference: **[LEGAL.md](./LEGAL.md)**).
 2. **`pocketjury-redis`**: Boots the cache layer for JWT debouncing and rate limits.
 3. **`pocketjury-api`**: Starts the internal Express Gateway.
