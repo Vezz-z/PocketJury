@@ -2,6 +2,7 @@
   "name": "pocketjury",
   "version": "1.0.0",
   "private": true,
+  "packageManager": "npm@10.0.0",
   "description": "Multilingual AI-powered legal assistant for PAN India deployment",
   "workspaces": [
     "apps/*",

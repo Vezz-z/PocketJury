@@ -5,7 +5,7 @@
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 import structlog
 
 logger = structlog.get_logger()
@@ -111,8 +111,6 @@ class ContentFilter:
 
         Returns SafetyResult with is_blocked=True if content is unsafe.
         """
-        text_lower = text.lower()
-
         # Check prompt injection
         for pattern in self._injection_re:
             if pattern.search(text):
