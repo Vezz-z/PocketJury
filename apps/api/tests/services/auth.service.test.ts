@@ -10,10 +10,10 @@ const mockRedisSet = jest.fn();
 const mockRedisDel = jest.fn();
 const mockSignAccessToken = jest.fn();
 const mockSignRefreshToken = jest.fn();
-let generatedSessionId = "new-session-id";
+let mockSessionId = "new-session-id";
 
 jest.mock("crypto", () => ({
-  randomUUID: jest.fn(() => generatedSessionId),
+  randomUUID: jest.fn(() => mockSessionId),
 }));
 
 jest.mock("../../src/config/database", () => ({
@@ -47,7 +47,7 @@ describe("AuthService", () => {
   beforeEach(() => {
     service = new AuthService();
     jest.clearAllMocks();
-    generatedSessionId = "new-session-id";
+    mockSessionId = "new-session-id";
 
     mockPrismaUserFindUnique.mockResolvedValue({
       id: "user-1",
