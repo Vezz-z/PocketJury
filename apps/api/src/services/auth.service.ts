@@ -303,21 +303,21 @@ export class AuthService {
       throw createError("User not found or deactivated", 401);
     }
 
-    const nextSessionId = sessionId || randomUUID();
+    const effectiveSessionId = sessionId || randomUUID();
     const accessToken = await signAccessToken({
       userId: user.id,
       role: user.role,
       lang: user.preferredLanguage,
-      sessionId: nextSessionId,
+      sessionId: effectiveSessionId,
     });
-    const refreshToken = await signRefreshToken(user.id, nextSessionId);
+    const refreshToken = await signRefreshToken(user.id, effectiveSessionId);
 
     // Rotate refresh token
     if (!sessionId) {
       await redis.del(this.getLegacyRefreshKey(user.id));
     }
     await redis.set(
-      this.getSessionRefreshKey(user.id, nextSessionId),
+      this.getSessionRefreshKey(user.id, effectiveSessionId),
       refreshToken,
       "EX",
       CACHE_TTL.REFRESH_TOKEN

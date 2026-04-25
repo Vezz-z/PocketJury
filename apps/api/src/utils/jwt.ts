@@ -3,6 +3,7 @@
 // ==============================================================================
 
 import { SignJWT, jwtVerify, importPKCS8, importSPKI, type JWTPayload } from "jose";
+import { randomUUID } from "crypto";
 import { env } from "../config/env";
 
 export interface TokenPayload extends JWTPayload {
@@ -53,7 +54,7 @@ export async function signAccessToken(payload: {
     .sign(key);
 }
 
-export async function signRefreshToken(userId: string, sessionId: string): Promise<string> {
+export async function signRefreshToken(userId: string, sessionId: string = randomUUID()): Promise<string> {
   const key = await getPrivateKey();
   return new SignJWT({ sub: userId, sid: sessionId })
     .setProtectedHeader({ alg: "RS256", typ: "JWT" })
