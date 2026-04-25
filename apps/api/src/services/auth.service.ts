@@ -4,6 +4,7 @@
 
 import prisma from "../config/database";
 import redis from "../config/redis";
+import { randomUUID } from "crypto";
 import { hashPassword, verifyPassword } from "../utils/hash";
 import { encrypt, hashForLookup } from "../utils/encryption";
 import { signAccessToken, signRefreshToken } from "../utils/jwt";
@@ -45,6 +46,14 @@ interface AuthResult {
 }
 
 export class AuthService {
+  private getLegacyRefreshKey(userId: string): string {
+    return `refresh:${userId}`;
+  }
+
+  private getSessionRefreshKey(userId: string, sessionId: string): string {
+    return `refresh:${userId}:${sessionId}`;
+  }
+
   async register(input: RegisterInput): Promise<AuthResult> {
     const emailHash = hashForLookup(input.email);
 
@@ -86,16 +95,18 @@ export class AuthService {
       include: { profile: true },
     });
 
+    const sessionId = randomUUID();
     const accessToken = await signAccessToken({
       userId: user.id,
       role: user.role,
       lang: user.preferredLanguage,
+      sessionId,
     });
-    const refreshToken = await signRefreshToken(user.id);
+    const refreshToken = await signRefreshToken(user.id, sessionId);
 
     // Store refresh token in Redis
     await redis.set(
-      `refresh:${user.id}`,
+      this.getSessionRefreshKey(user.id, sessionId),
       refreshToken,
       "EX",
       CACHE_TTL.REFRESH_TOKEN
@@ -161,14 +172,16 @@ export class AuthService {
       data: { lastLoginAt: new Date() },
     });
 
+    const sessionId = randomUUID();
     const accessToken = await signAccessToken({
       userId: user.id,
       role: user.role,
       lang: user.preferredLanguage,
+      sessionId,
     });
-    const refreshToken = await signRefreshToken(user.id);
+    const refreshToken = await signRefreshToken(user.id, sessionId);
 
-    await redis.set(`refresh:${user.id}`, refreshToken, "EX", CACHE_TTL.REFRESH_TOKEN);
+    await redis.set(this.getSessionRefreshKey(user.id, sessionId), refreshToken, "EX", CACHE_TTL.REFRESH_TOKEN);
 
     return {
       user: {
@@ -240,13 +253,15 @@ export class AuthService {
       data: { lastLoginAt: new Date() },
     });
 
+    const sessionId = randomUUID();
     const accessToken = await signAccessToken({
       userId: user.id,
       role: user.role,
       lang: user.preferredLanguage,
+      sessionId,
     });
-    const refreshToken = await signRefreshToken(user.id);
-    await redis.set(`refresh:${user.id}`, refreshToken, "EX", CACHE_TTL.REFRESH_TOKEN);
+    const refreshToken = await signRefreshToken(user.id, sessionId);
+    await redis.set(this.getSessionRefreshKey(user.id, sessionId), refreshToken, "EX", CACHE_TTL.REFRESH_TOKEN);
 
     return {
       user: {
@@ -268,11 +283,18 @@ export class AuthService {
     };
   }
 
-  async refreshTokens(userId: string, currentRefreshToken: string): Promise<{ accessToken: string; refreshToken: string }> {
-    const stored = await redis.get(`refresh:${userId}`);
+  async refreshTokens(
+    userId: string,
+    currentRefreshToken: string,
+    sessionId?: string
+  ): Promise<{ accessToken: string; refreshToken: string }> {
+    const refreshKey = sessionId
+      ? this.getSessionRefreshKey(userId, sessionId)
+      : this.getLegacyRefreshKey(userId);
+    const stored = await redis.get(refreshKey);
     if (!stored || stored !== currentRefreshToken) {
-      // Possible token reuse attack — invalidate all sessions
-      await redis.del(`refresh:${userId}`);
+      // Possible token reuse attack — invalidate only the affected session
+      await redis.del(refreshKey);
       throw createError("Invalid refresh token", 401);
     }
 
@@ -281,21 +303,36 @@ export class AuthService {
       throw createError("User not found or deactivated", 401);
     }
 
+    const effectiveSessionId = sessionId || randomUUID();
     const accessToken = await signAccessToken({
       userId: user.id,
       role: user.role,
       lang: user.preferredLanguage,
+      sessionId: effectiveSessionId,
     });
-    const refreshToken = await signRefreshToken(user.id);
+    const refreshToken = await signRefreshToken(user.id, effectiveSessionId);
 
     // Rotate refresh token
-    await redis.set(`refresh:${user.id}`, refreshToken, "EX", CACHE_TTL.REFRESH_TOKEN);
+    if (!sessionId) {
+      await redis.del(this.getLegacyRefreshKey(user.id));
+    }
+    await redis.set(
+      this.getSessionRefreshKey(user.id, effectiveSessionId),
+      refreshToken,
+      "EX",
+      CACHE_TTL.REFRESH_TOKEN
+    );
 
     return { accessToken, refreshToken };
   }
 
-  async logout(userId: string): Promise<void> {
-    await redis.del(`refresh:${userId}`);
+  async logout(userId: string, sessionId?: string): Promise<void> {
+    if (sessionId) {
+      await redis.del(this.getSessionRefreshKey(userId, sessionId));
+      return;
+    }
+
+    await redis.del(this.getLegacyRefreshKey(userId));
   }
 }
 

@@ -3,12 +3,14 @@
 // ==============================================================================
 
 import { SignJWT, jwtVerify, importPKCS8, importSPKI, type JWTPayload } from "jose";
+import { randomUUID } from "crypto";
 import { env } from "../config/env";
 
 export interface TokenPayload extends JWTPayload {
   sub: string;
   role: string;
   lang: string;
+  sid?: string;
 }
 
 let privateKey: CryptoKey;
@@ -35,12 +37,14 @@ export async function signAccessToken(payload: {
   userId: string;
   role: string;
   lang: string;
+  sessionId?: string;
 }): Promise<string> {
   const key = await getPrivateKey();
   return new SignJWT({
     sub: payload.userId,
     role: payload.role,
     lang: payload.lang,
+    ...(payload.sessionId ? { sid: payload.sessionId } : {}),
   })
     .setProtectedHeader({ alg: "RS256", typ: "JWT" })
     .setIssuedAt()
@@ -50,9 +54,10 @@ export async function signAccessToken(payload: {
     .sign(key);
 }
 
-export async function signRefreshToken(userId: string): Promise<string> {
+export async function signRefreshToken(userId: string, sessionId?: string): Promise<string> {
   const key = await getPrivateKey();
-  return new SignJWT({ sub: userId })
+  const effectiveSessionId = sessionId ?? randomUUID();
+  return new SignJWT({ sub: userId, sid: effectiveSessionId })
     .setProtectedHeader({ alg: "RS256", typ: "JWT" })
     .setIssuedAt()
     .setExpirationTime(env.JWT_REFRESH_EXPIRY)

@@ -11,6 +11,7 @@ import { auditLog } from "../middleware/audit";
 import { validate } from "../middleware/validate";
 import { verifyRefreshToken } from "../utils/jwt";
 import { env } from "../config/env";
+import { CACHE_TTL } from "@pocketjury/shared";
 
 const router = Router();
 
@@ -183,13 +184,22 @@ router.post(
         return;
       }
 
-      const tokens = await authService.refreshTokens(payload.sub, refreshToken);
+      const sessionId = typeof payload.sid === "string" ? payload.sid : undefined;
+      const tokens = await authService.refreshTokens(payload.sub, refreshToken, sessionId);
 
       res.cookie("accessToken", tokens.accessToken, {
         httpOnly: true,
         secure: process.env.NODE_ENV === "production",
         sameSite: "strict",
         maxAge: 15 * 60 * 1000,
+      });
+
+      res.cookie("refreshToken", tokens.refreshToken, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "strict",
+        maxAge: CACHE_TTL.REFRESH_TOKEN * 1000,
+        path: "/api/v1/auth/refresh",
       });
 
       res.json({ accessToken: tokens.accessToken });
@@ -207,7 +217,8 @@ router.post(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       if (req.user?.sub) {
-        await authService.logout(req.user.sub);
+        const sessionId = typeof req.user.sid === "string" ? req.user.sid : undefined;
+        await authService.logout(req.user.sub, sessionId);
       }
 
       res.clearCookie("accessToken");
