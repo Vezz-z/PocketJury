@@ -11,6 +11,7 @@ import { auditLog } from "../middleware/audit";
 import { validate } from "../middleware/validate";
 import { verifyRefreshToken } from "../utils/jwt";
 import { env } from "../config/env";
+import { CACHE_TTL } from "@pocketjury/shared";
 
 const router = Router();
 
@@ -197,7 +198,7 @@ router.post(
         httpOnly: true,
         secure: process.env.NODE_ENV === "production",
         sameSite: "strict",
-        maxAge: 7 * 24 * 60 * 60 * 1000,
+        maxAge: CACHE_TTL.REFRESH_TOKEN * 1000,
         path: "/api/v1/auth/refresh",
       });
 

@@ -54,9 +54,10 @@ export async function signAccessToken(payload: {
     .sign(key);
 }
 
-export async function signRefreshToken(userId: string, sessionId: string = randomUUID()): Promise<string> {
+export async function signRefreshToken(userId: string, sessionId?: string): Promise<string> {
   const key = await getPrivateKey();
-  return new SignJWT({ sub: userId, sid: sessionId })
+  const effectiveSessionId = sessionId ?? randomUUID();
+  return new SignJWT({ sub: userId, sid: effectiveSessionId })
     .setProtectedHeader({ alg: "RS256", typ: "JWT" })
     .setIssuedAt()
     .setExpirationTime(env.JWT_REFRESH_EXPIRY)
