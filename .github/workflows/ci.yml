@@ -34,6 +34,10 @@ jobs:
       - name: Install dependencies
         run: npm ci --workspaces --include-workspace-root
 
+      - name: Generate Prisma client
+        working-directory: apps/api
+        run: npx prisma generate
+
       - name: Lint
         run: npm run lint
 
@@ -82,6 +86,13 @@ jobs:
 
       - name: Install dependencies
         run: npm ci --workspaces --include-workspace-root
+
+      - name: Build shared package
+        run: npm run build --workspace=packages/shared
+
+      - name: Generate Prisma client
+        working-directory: apps/api
+        run: npx prisma generate
 
       - name: Run migrations
         working-directory: apps/api
