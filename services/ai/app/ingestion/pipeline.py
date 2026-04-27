@@ -148,6 +148,15 @@ class LegalTextChunker:
     def _chunk_by_paragraphs(self, text: str, document_title: str) -> list[dict]:
         """Fall back: chunk by paragraphs with word-count grouping."""
         paragraphs = [p.strip() for p in text.split("\n\n") if p.strip()]
+
+        # If the text is one large paragraph exceeding chunk_size, use word-count chunking
+        if len(paragraphs) <= 1 and len(text.split()) >= self.chunk_size:
+            sub_chunks = self._word_count_chunk(text.strip(), None)
+            for i, sc in enumerate(sub_chunks):
+                sc["chunk_index"] = i
+                sc["metadata"] = {"document_title": document_title}
+            return sub_chunks
+
         chunks = []
         current_chunk = ""
         current_words = 0

@@ -61,23 +61,17 @@ class OutputValidator:
         "Digital Personal Data Protection Act",
     ]
 
-    def validate(self, text: str) -> dict:
+    def validate(self, text: str) -> list[str]:
         """
-        Validate output and return quality metrics.
-
-        Returns:
-            dict with keys: is_valid, issues, quality_score
+        Validate output and return a list of issue strings (empty = valid).
         """
         issues: list[str] = []
-        score = 1.0
 
         # 1. Length check
         if len(text) < 50:
             issues.append("Response too short (< 50 chars)")
-            score -= 0.3
         elif len(text) > 10000:
             issues.append("Response very long (> 10K chars)")
-            score -= 0.1
 
         # 2. Check for fabricated-looking section numbers
         section_pattern = re.compile(r"Section\s+(\d+[A-Z]?)", re.IGNORECASE)
@@ -93,7 +87,6 @@ class OutputValidator:
                     num = int(re.sub(r"[A-Z]", "", s))
                     if num > 600:
                         issues.append(f"Potentially fabricated section: {s}")
-                        score -= 0.15
                 except ValueError:
                     pass
 
@@ -109,7 +102,6 @@ class OutputValidator:
         )
         if not has_disclaimer:
             issues.append("Missing disclaimer")
-            score -= 0.1
 
         # 4. No promises/guarantees
         guarantee_patterns = [
@@ -121,7 +113,6 @@ class OutputValidator:
         for p in guarantee_patterns:
             if re.search(p, text, re.IGNORECASE):
                 issues.append("Contains guarantee/promise")
-                score -= 0.2
 
         # 5. Hallucination signals
         hallucination_patterns = [
@@ -132,10 +123,5 @@ class OutputValidator:
         for p in hallucination_patterns:
             if re.search(p, text, re.IGNORECASE):
                 issues.append("Potential hallucination signal detected (verify citations)")
-                score -= 0.05
 
-        return {
-            "is_valid": score > 0.5,
-            "issues": issues,
-            "quality_score": round(max(score, 0.0), 2),
-        }
+        return issues

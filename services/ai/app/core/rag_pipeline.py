@@ -147,10 +147,10 @@ class RAGPipeline:
         if helpline_result.triggered:
             helplines = [
                 HelplineInfo(
-                    name=h["name"],
-                    phone=h["phone"],
-                    description=h["description"],
-                    category=h["category"],
+                    name=h.name,
+                    phone=h.phone,
+                    description=h.description,
+                    category=h.category,
                 )
                 for h in helpline_result.helplines
             ]
