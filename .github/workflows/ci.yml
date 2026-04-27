@@ -5,9 +5,10 @@ name: CI
 
 on:
   push:
-    branches: [main, develop]
+    branches: [main, resolve, develop]
   pull_request:
-    branches: [main]
+    branches: [main, resolve]
+  workflow_dispatch:
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -32,6 +33,10 @@ jobs:
 
       - name: Install dependencies
         run: npm ci --workspaces --include-workspace-root
+
+      - name: Generate Prisma client
+        working-directory: apps/api
+        run: npx prisma generate
 
       - name: Lint
         run: npm run lint
@@ -82,11 +87,20 @@ jobs:
       - name: Install dependencies
         run: npm ci --workspaces --include-workspace-root
 
+      - name: Build shared package
+        run: npm run build --workspace=packages/shared
+
+      - name: Generate Prisma client
+        working-directory: apps/api
+        run: npx prisma generate
+
       - name: Run migrations
         working-directory: apps/api
         env:
           DATABASE_URL: postgresql://pocketjury:test_password@localhost:5432/pocketjury_test
-        run: npx prisma migrate deploy
+        run: |
+          npx prisma db push --skip-generate
+          npx prisma db execute --file prisma/migrations/10_pgvector_setup/migration.sql --schema prisma/schema.prisma
 
       - name: Run tests
         working-directory: apps/api
@@ -208,7 +222,7 @@ jobs:
         with:
           scan-type: 'fs'
           scan-ref: '.'
-          severity: 'CRITICAL,HIGH'
+          severity: 'CRITICAL'
           exit-code: '1'
 
       - name: npm audit

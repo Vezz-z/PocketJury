@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import re
 import structlog
-from langdetect import detect, detect_langs, LangDetectException
+from langdetect import detect_langs, LangDetectException
 
 logger = structlog.get_logger()
 
@@ -26,55 +26,38 @@ SCRIPT_TO_LANG = {
 class LanguageDetector:
     """Detects language of input text with fallback to script analysis."""
 
-    def detect(self, text: str) -> str:
+    def detect(self, text: str) -> tuple[str, float]:
         """
-        Detect language of text. Returns ISO 639-1 code.
+        Detect language of text. Returns (ISO 639-1 code, confidence).
         Priority: script analysis > langdetect > default (en).
         """
         if not text or len(text.strip()) < 2:
-            return "en"
+            return "en", 1.0
 
         # Stage 1: Script-based detection (highest accuracy for Indian languages)
         script_lang = self._detect_by_script(text)
         if script_lang:
-            return script_lang
+            return script_lang, 0.95
 
         # Stage 2: Statistical detection via langdetect
         try:
-            detected = detect(text)
-            if detected in SUPPORTED_LANGS:
-                return detected
-            # Map closely related codes
-            lang_map = {"bh": "hi", "ne": "hi"}  # Bhojpuri/Nepali → Hindi fallback
-            if detected in lang_map:
-                return lang_map[detected]
-        except LangDetectException:
-            pass
-
-        # Stage 3: Default to English
-        return "en"
-
-    def detect_with_confidence(self, text: str) -> tuple[str, float]:
-        """Detect language with confidence score."""
-        if not text or len(text.strip()) < 2:
-            return "en", 1.0
-
-        # Script-based
-        script_lang = self._detect_by_script(text)
-        if script_lang:
-            return script_lang, 0.95
-
-        # Statistical
-        try:
             results = detect_langs(text)
+            lang_map = {"bh": "hi", "ne": "hi"}  # Bhojpuri/Nepali → Hindi fallback
             for result in results:
                 lang_code = str(result.lang)
                 if lang_code in SUPPORTED_LANGS:
                     return lang_code, round(result.prob, 3)
+                if lang_code in lang_map:
+                    return lang_map[lang_code], round(result.prob, 3)
         except LangDetectException:
             pass
 
+        # Stage 3: Default to English
         return "en", 0.5
+
+    def detect_with_confidence(self, text: str) -> tuple[str, float]:
+        """Detect language with confidence score. Delegates to detect()."""
+        return self.detect(text)
 
     def _detect_by_script(self, text: str) -> str | None:
         """Detect language by Unicode script presence."""

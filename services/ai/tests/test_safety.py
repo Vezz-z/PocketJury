@@ -2,7 +2,6 @@
 # PocketJury — AI Service Tests (RAG Pipeline)
 # ==============================================================================
 
-import pytest
 from app.safety.content_filter import ContentFilter
 from app.safety.helpline_detector import HelplineDetector
 from app.safety.output_validator import OutputValidator

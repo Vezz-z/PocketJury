@@ -5,7 +5,7 @@
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 import structlog
 
 logger = structlog.get_logger()
@@ -19,6 +19,16 @@ class SafetyResult:
     reason: str = ""
     message: str = ""
     sanitized_text: str | None = None
+
+    @property
+    def should_block(self) -> bool:
+        """Alias for is_blocked — used by tests and external callers."""
+        return self.is_blocked
+
+    @property
+    def should_sanitize(self) -> bool:
+        """True when the output was sanitised but not fully blocked."""
+        return self.sanitized_text is not None
 
 
 class ContentFilter:
@@ -53,7 +63,7 @@ class ContentFilter:
     ]
 
     VIOLENCE_PATTERNS = [
-        r"how\s+to\s+(kill|murder|harm|poison|attack)\s+(a\s+|my\s+)?person",
+        r"how\s+to\s+(?:\w+\s+)?(kill|murder|harm|poison|attack)\s+(?:a\s+|my\s+|some)?(?:person|one|people)",
         r"how\s+to\s+make\s+(a\s+)?(bomb|explosive|weapon)",
         r"how\s+to\s+(hire|find)\s+(a\s+)?(hitman|assassin|killer)",
         r"help\s+me\s+(kill|murder|harm|hurt|attack)",
@@ -80,7 +90,7 @@ class ContentFilter:
         r"I\s+(am|can\s+act\s+as)\s+your\s+(lawyer|advocate)",
         r"my\s+legal\s+advice\s+(is|would\s+be)",
         r"I\s+guarantee\s+(that|you\s+will\s+win)",
-        r"you\s+will\s+(definitely|certainly)\s+win",
+        r"you\s+will\s+(?:definitely\s+|certainly\s+)?win",
         r"the\s+court\s+will\s+(definitely|certainly)",
     ]
 
@@ -111,8 +121,6 @@ class ContentFilter:
 
         Returns SafetyResult with is_blocked=True if content is unsafe.
         """
-        text_lower = text.lower()
-
         # Check prompt injection
         for pattern in self._injection_re:
             if pattern.search(text):

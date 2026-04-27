@@ -12,60 +12,80 @@ logger = structlog.get_logger()
 
 
 @dataclass
+class HelplineEntry:
+    """A single helpline record."""
+
+    name: str
+    phone: str
+    description: str
+    category: str
+
+
+@dataclass
 class HelplineResult:
     """Result of helpline/crisis detection."""
 
     triggered: bool = False
     categories: list[str] = field(default_factory=list)
-    helplines: list[dict] = field(default_factory=list)
+    helplines: list[HelplineEntry] = field(default_factory=list)
     is_crisis: bool = False
 
 
+# Crisis categories — any match here marks the query as a crisis
+_CRISIS_CATEGORIES: frozenset[str] = frozenset({
+    "suicide",
+    "sexual_assault",
+    "domestic_violence",
+    "child_abuse",
+    "cyber_crime",
+})
+
+
 # --- Helpline Database ---
-HELPLINE_DB: dict[str, list[dict]] = {
+HELPLINE_DB: dict[str, list[HelplineEntry]] = {
     "domestic_violence": [
-        {"name": "Women Helpline", "phone": "181", "description": "24/7 helpline for women in distress — domestic violence, harassment, dowry, sexual assault", "category": "Women & Child"},
-        {"name": "National Commission for Women", "phone": "7827-170-170", "description": "WhatsApp for women's rights complaints", "category": "Women & Child"},
-        {"name": "NALSA Legal Aid", "phone": "15100", "description": "Free legal aid for domestic violence victims", "category": "Legal Aid"},
+        HelplineEntry("Women Helpline", "181", "24/7 helpline for women in distress — domestic violence, harassment, dowry, sexual assault", "Women & Child"),
+        HelplineEntry("National Commission for Women", "7827-170-170", "WhatsApp for women's rights complaints", "Women & Child"),
+        HelplineEntry("NALSA Legal Aid", "15100", "Free legal aid for domestic violence victims", "Legal Aid"),
     ],
     "child_abuse": [
-        {"name": "Childline India", "phone": "1098", "description": "24/7 helpline for children in need of care and protection", "category": "Women & Child"},
-        {"name": "Police Emergency", "phone": "112", "description": "Unified emergency number", "category": "Emergency"},
+        HelplineEntry("Childline India", "1098", "24/7 helpline for children in need of care and protection", "Women & Child"),
+        HelplineEntry("Police Emergency", "112", "Unified emergency number", "Emergency"),
     ],
     "sexual_assault": [
-        {"name": "Women Helpline", "phone": "181", "description": "24/7 helpline for sexual assault response", "category": "Women & Child"},
-        {"name": "Police Emergency", "phone": "112", "description": "Unified emergency number", "category": "Emergency"},
-        {"name": "NALSA Legal Aid", "phone": "15100", "description": "Free legal aid for sexual assault survivors", "category": "Legal Aid"},
+        HelplineEntry("Women Helpline", "181", "24/7 helpline for sexual assault response", "Women & Child"),
+        HelplineEntry("Police Emergency", "112", "Unified emergency number", "Emergency"),
+        HelplineEntry("NALSA Legal Aid", "15100", "Free legal aid for sexual assault survivors", "Legal Aid"),
     ],
     "cyber_crime": [
-        {"name": "Cyber Crime Helpline", "phone": "1930", "description": "National helpline for cyber crimes — online fraud, identity theft, cyber bullying", "category": "Cyber Crime"},
-        {"name": "Police Emergency", "phone": "112", "description": "Unified emergency number", "category": "Emergency"},
+        HelplineEntry("Cyber Crime Helpline", "1930", "National helpline for cyber crimes — online fraud, identity theft, cyber bullying", "Cyber Crime"),
+        HelplineEntry("Police Emergency", "112", "Unified emergency number", "Emergency"),
     ],
     "consumer": [
-        {"name": "Consumer Helpline", "phone": "14566", "description": "Grievances for defective products, deficient services, unfair trade", "category": "Consumer"},
+        HelplineEntry("Consumer Helpline", "14566", "Grievances for defective products, deficient services, unfair trade", "Consumer"),
     ],
     "senior_citizen": [
-        {"name": "Senior Citizen Helpline", "phone": "14567", "description": "Assistance for elder abuse, pension, medical aid, legal support", "category": "Senior Citizens"},
-        {"name": "NALSA Legal Aid", "phone": "15100", "description": "Free legal aid for senior citizens", "category": "Legal Aid"},
+        HelplineEntry("Senior Citizen Helpline", "14567", "Assistance for elder abuse, pension, medical aid, legal support", "Senior Citizens"),
+        HelplineEntry("NALSA Legal Aid", "15100", "Free legal aid for senior citizens", "Legal Aid"),
     ],
     "legal_aid": [
-        {"name": "NALSA Legal Aid", "phone": "15100", "description": "Free legal aid and advice for eligible citizens", "category": "Legal Aid"},
-        {"name": "Department of Justice Helpline", "phone": "1800-419-8588", "description": "Toll-free for legal aid queries and pro bono assistance", "category": "Legal Aid"},
+        HelplineEntry("NALSA Legal Aid", "15100", "Free legal aid and advice for eligible citizens", "Legal Aid"),
+        HelplineEntry("Department of Justice Helpline", "1800-419-8588", "Toll-free for legal aid queries and pro bono assistance", "Legal Aid"),
     ],
     "mental_health": [
-        {"name": "Vandrevala Foundation", "phone": "1860-2662-345", "description": "24/7 mental health and crisis helpline", "category": "Mental Health"},
-        {"name": "iCall", "phone": "9152987821", "description": "Mental health counselling support", "category": "Mental Health"},
+        HelplineEntry("Vandrevala Foundation", "1860-2662-345", "24/7 mental health and crisis helpline", "Mental Health"),
+        HelplineEntry("iCall", "9152987821", "Mental health counselling support", "Mental Health"),
     ],
     "suicide": [
-        {"name": "Vandrevala Foundation", "phone": "1860-2662-345", "description": "24/7 crisis intervention helpline", "category": "Mental Health"},
-        {"name": "AASRA", "phone": "9820466726", "description": "Suicide prevention helpline", "category": "Mental Health"},
-        {"name": "Police Emergency", "phone": "112", "description": "Unified emergency number", "category": "Emergency"},
+        HelplineEntry("Vandrevala Foundation", "1860-2662-345", "24/7 crisis intervention helpline", "Mental Health"),
+        HelplineEntry("AASRA", "9820466726", "Suicide prevention helpline", "Mental Health"),
+        HelplineEntry("Police Emergency", "112", "Unified emergency number", "Emergency"),
     ],
     "ragging": [
-        {"name": "Anti Ragging Helpline", "phone": "1800-180-5522", "description": "Report ragging in educational institutions", "category": "Education"},
+        HelplineEntry("Anti Ragging Helpline", "1800-180-5522", "Report ragging in educational institutions", "Education"),
     ],
     "railway": [
-        {"name": "Railway Police (RPF)", "phone": "182", "description": "Crimes on railway premises and trains", "category": "Transport"},
+        HelplineEntry("Railway Police (RPF)", "182", "Crimes on railway premises and trains", "Transport"),
     ],
 }
 
@@ -180,12 +200,12 @@ class HelplineDetector:
                     triggered_categories.append(category)
                     # Add helplines for this category
                     for h in HELPLINE_DB.get(category, []):
-                        if h["phone"] not in seen_phones:
+                        if h.phone not in seen_phones:
                             all_helplines.append(h)
-                            seen_phones.add(h["phone"])
+                            seen_phones.add(h.phone)
                     break  # One match per category is enough
 
-        is_crisis = "suicide" in triggered_categories or "sexual_assault" in triggered_categories
+        is_crisis = bool(set(triggered_categories) & _CRISIS_CATEGORIES)
 
         if triggered_categories:
             logger.info(

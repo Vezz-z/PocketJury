@@ -14,7 +14,6 @@ from app.models.schemas import (
     QueryResponse,
     SimplifyRequest,
     SimplifyResponse,
-    SafetyFlag,
 )
 from app.core.rag_pipeline import RAGPipeline
 from app.core.prompt_templates import SIMPLIFY_PROMPT

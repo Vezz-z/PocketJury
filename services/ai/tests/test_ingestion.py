@@ -2,7 +2,6 @@
 # PocketJury — AI Service Tests (Ingestion Pipeline)
 # ==============================================================================
 
-import pytest
 from app.ingestion.pipeline import LegalTextChunker
 
 
@@ -16,7 +15,7 @@ class TestLegalTextChunker:
         text = "Section 1. Short title. This Act may be called the Test Act."
         chunks = self.chunker.chunk(text)
         assert len(chunks) == 1
-        assert text in chunks[0]
+        assert text in chunks[0]["content"]
 
     def test_splits_long_text_into_multiple_chunks(self):
         text = "Lorem ipsum dolor sit amet. " * 100
@@ -32,7 +31,7 @@ class TestLegalTextChunker:
         )
         chunks = self.chunker.chunk(text)
         # Section 2 should start a new chunk when possible
-        assert any("Section 2" in c for c in chunks)
+        assert any("Section 2" in c["content"] for c in chunks)
 
     def test_preserves_proviso_with_parent_section(self):
         text = (
@@ -44,7 +43,7 @@ class TestLegalTextChunker:
         chunks = self.chunker.chunk(text)
         # Proviso should be in the same chunk as its parent section
         assert len(chunks) == 1
-        assert "Provided that" in chunks[0]
+        assert "Provided that" in chunks[0]["content"]
 
     def test_empty_text_returns_empty_list(self):
         chunks = self.chunker.chunk("")
@@ -56,5 +55,5 @@ class TestLegalTextChunker:
         chunks = chunker.chunk(text)
         if len(chunks) > 1:
             # Check overlap exists
-            end_of_first = chunks[0][-50:]
-            assert end_of_first in chunks[1] or len(chunks) == 1
+            end_of_first = chunks[0]["content"][-50:]
+            assert end_of_first in chunks[1]["content"] or len(chunks) == 1
