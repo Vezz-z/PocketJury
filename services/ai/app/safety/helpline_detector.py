@@ -200,9 +200,9 @@ class HelplineDetector:
                     triggered_categories.append(category)
                     # Add helplines for this category
                     for h in HELPLINE_DB.get(category, []):
-                        if h["phone"] not in seen_phones:
+                        if h.phone not in seen_phones:
                             all_helplines.append(h)
-                            seen_phones.add(h["phone"])
+                            seen_phones.add(h.phone)
                     break  # One match per category is enough
 
         is_crisis = bool(set(triggered_categories) & _CRISIS_CATEGORIES)
