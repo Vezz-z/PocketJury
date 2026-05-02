@@ -316,7 +316,6 @@ class RAGPipeline:
         detected_lang, confidence = self._lang_detector.detect_with_confidence(query)
         if confidence < 0.7 and request.language.value != "en":
             detected_lang = request.language.value
-        language = SupportedLanguage(detected_lang)
 
         # ================================================================
         # STAGE 3: Translation to English
