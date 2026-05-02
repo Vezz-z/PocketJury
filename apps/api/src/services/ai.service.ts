@@ -186,6 +186,32 @@ export class AIService {
       return false;
     }
   }
+
+  async generateTitle(query: string): Promise<string> {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s timeout
+
+    try {
+      const response = await fetch(`${this.baseUrl}/api/v1/generate-title`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ query }),
+        signal: controller.signal,
+      });
+
+      if (!response.ok) {
+        throw new Error(`AI service returned ${response.status}`);
+      }
+
+      const data = await response.json();
+      return data.title || query.slice(0, 40);
+    } catch (err) {
+      logger.warn({ err }, "Title generation failed, falling back to query text");
+      return query.length > 40 ? query.slice(0, 40) + "…" : query;
+    } finally {
+      clearTimeout(timeoutId);
+    }
+  }
 }
 
 export const aiService = new AIService();

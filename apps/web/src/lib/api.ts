@@ -140,7 +140,7 @@ export const chatApi = {
     }),
 
   simplify: (chatId: string, messageId: string) =>
-    fetchWithAuth(`/chats/${chatId}/messages/${messageId}/simplify`, { method: 'POST' }).then((r) => r.json()),
+    fetchWithAuth(`/chats/${chatId}/messages/${messageId}/simplify`, { method: 'POST', timeout: 120000 }).then((r) => r.json()),
 
   getReferences: (chatId: string, messageId: string) =>
     fetchWithAuth(`/chats/${chatId}/messages/${messageId}/references`, { method: 'POST' }).then((r) => r.json()),

@@ -129,7 +129,7 @@ TITLE_PROMPT = """Generate a short, descriptive title (2-5 words) for a legal co
 "{query}"
 
 Rules:
-- Maximum 8 words
+- Maximum 5 words
 - Capture the main legal topic
 - Do not include punctuation except hyphens
 - Examples: "Property Dispute with Neighbour", "FIR Filing Process for Theft", "Divorce Rights Under Hindu Law"
