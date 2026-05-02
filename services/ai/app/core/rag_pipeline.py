@@ -4,9 +4,13 @@
 
 from __future__ import annotations
 
+import asyncio
+import json
 import re
 import time
 import html
+from typing import AsyncIterator
+
 import structlog
 import sqlalchemy as sa
 
@@ -15,7 +19,7 @@ import app.constants as constants
 from app.core.embedder import EmbedderService
 from app.core.retriever import RetrieverService, RetrievedChunk
 from app.core.llm_client import LLMClient
-from app.core.translator import TranslatorService
+from app.core.translator import TranslatorService, LANGUAGE_NAMES
 from app.core.language_detector import LanguageDetector
 from app.core.prompt_templates import (
     SYSTEM_PROMPT,
@@ -60,7 +64,7 @@ class RAGPipeline:
     7.  Hybrid retrieval (vector + full-text + RRF)
     8.  Re-ranking & deduplication
     9.  Prompt assembly with persona adaptation
-    10. LLM generation (Claude 3.5 Sonnet via Bedrock)
+    10. LLM generation (OpenRouter — gpt-oss-120b:free)
     11. Output safety validation
     12. IPC→BNS cross-reference injection
     13. Translation back to user language & response formatting
@@ -84,8 +88,12 @@ class RAGPipeline:
         self._content_filter = content_filter
         self._helpline_detector = helpline_detector
 
+    # ==================================================================
+    # Standard (non-streaming) pipeline — unchanged behaviour
+    # ==================================================================
+
     async def process(self, request: QueryRequest) -> QueryResponse:
-        """Execute the full 13-stage pipeline."""
+        """Execute the full 13-stage pipeline (non-streaming)."""
         start = time.perf_counter()
 
         # ================================================================
@@ -139,11 +147,26 @@ class RAGPipeline:
         logger.info("Stage 4: Content safety passed")
 
         # ================================================================
-        # STAGE 5: Helpline / Crisis Detection
+        # STAGES 5 + 6 + 7 + 12: Parallelised independent stages
         # ================================================================
-        helpline_result = self._helpline_detector.detect(query_en)
-        helplines: list[HelplineInfo] = []
+        expanded_query = self._expand_query(query_en, request)
 
+        helpline_task = asyncio.to_thread(self._helpline_detector.detect, query_en)
+        retrieve_task = self._retriever.retrieve(
+            query=expanded_query,
+            jurisdiction=request.state,
+        )
+        ipc_bns_task = self._get_ipc_bns_notes(query_en)
+
+        helpline_result, chunks, ipc_bns_notes = await asyncio.gather(
+            helpline_task, retrieve_task, ipc_bns_task
+        )
+
+        logger.info("Stages 5-7,12: Parallel retrieval complete",
+                     helplines_triggered=helpline_result.triggered,
+                     chunks=len(chunks))
+
+        helplines: list[HelplineInfo] = []
         if helpline_result.triggered:
             helplines = [
                 HelplineInfo(
@@ -154,28 +177,6 @@ class RAGPipeline:
                 )
                 for h in helpline_result.helplines
             ]
-            logger.info(
-                "Stage 5: Helplines triggered",
-                categories=helpline_result.categories,
-                count=len(helplines),
-            )
-        else:
-            logger.info("Stage 5: No helplines triggered")
-
-        # ================================================================
-        # STAGE 6: Query Expansion & Persona Context
-        # ================================================================
-        expanded_query = self._expand_query(query_en, request)
-        logger.info("Stage 6: Query expanded", expanded_length=len(expanded_query))
-
-        # ================================================================
-        # STAGE 7: Hybrid Retrieval (Vector + Full-Text + RRF)
-        # ================================================================
-        chunks = await self._retriever.retrieve(
-            query=expanded_query,
-            jurisdiction=request.state,
-        )
-        logger.info("Stage 7: Retrieval complete", chunks=len(chunks))
 
         # ================================================================
         # STAGE 8: Re-ranking & Deduplication
@@ -188,7 +189,6 @@ class RAGPipeline:
         # ================================================================
         context_text = self._build_context(chunks)
         history_text = self._build_history(request.message_history)
-        ipc_bns_notes = await self._get_ipc_bns_notes(query_en)
 
         prompt = QUERY_PROMPT.format(
             persona=request.persona.value,
@@ -196,6 +196,7 @@ class RAGPipeline:
             profession=request.profession or "Not specified",
             education=request.education or "Not specified",
             language=detected_lang,
+            language_name=LANGUAGE_NAMES.get(detected_lang, "English"),
             history=history_text,
             context=context_text,
             ipc_bns_notes=ipc_bns_notes or "None applicable",
@@ -205,7 +206,7 @@ class RAGPipeline:
         logger.info("Stage 9: Prompt assembled", prompt_length=len(prompt))
 
         # ================================================================
-        # STAGE 10: LLM Generation
+        # STAGE 10: LLM Generation (OpenRouter)
         # ================================================================
         answer_en = await self._llm.generate(
             prompt=prompt,
@@ -229,20 +230,19 @@ class RAGPipeline:
         logger.info("Stage 11: Output safety passed")
 
         # ================================================================
-        # STAGE 12: IPC→BNS Cross-Reference
+        # STAGE 12: IPC→BNS Cross-Reference (already resolved above)
         # ================================================================
         ipc_bns_note = ipc_bns_notes if ipc_bns_notes else None
         logger.info("Stage 12: IPC-BNS cross-reference", has_notes=bool(ipc_bns_note))
 
         # ================================================================
-        # STAGE 13: Translation & Response Formatting
+        # STAGE 13: Response is already in the target language (LLM generates
+        # directly in the detected language).  A separate translation pass is
+        # no longer required — this saves an entire LLM round-trip for
+        # non-English queries.
         # ================================================================
-        answer_translated = None
-        if detected_lang != "en":
-            answer_translated = await self._translator.translate_from_english(
-                answer_en, detected_lang
-            )
-            logger.info("Stage 13: Response translated", target_lang=detected_lang)
+        answer_translated = None  # retained for API compatibility
+        logger.info("Stage 13: Skipped (LLM responded in target language)", target_lang=detected_lang)
 
         # Build references
         references = [
@@ -282,6 +282,185 @@ class RAGPipeline:
             ipc_bns_note=ipc_bns_note,
             processing_time_ms=round(elapsed, 2),
         )
+
+    # ==================================================================
+    # Streaming pipeline — yields SSE events for real-time delivery
+    # ==================================================================
+
+    async def process_stream(self, request: QueryRequest) -> AsyncIterator[str]:
+        """Execute the pipeline with streaming LLM generation.
+
+        Yields newline-delimited SSE events:
+        - ``event: metadata``  — references, helplines, confidence (sent before tokens)
+        - ``event: token``     — individual LLM text chunks
+        - ``event: done``      — final payload with full answer and translated text
+        - ``event: error``     — on pipeline failure
+        - ``event: blocked``   — if the query is blocked by safety filters
+        """
+        start = time.perf_counter()
+
+        # ================================================================
+        # STAGE 1: Input Sanitisation
+        # ================================================================
+        query = self._sanitize_input(request.query)
+        if len(query) < 3:
+            yield self._sse("error", {"message": "Query too short. Please provide more detail."})
+            return
+        if len(query) > constants.MAX_QUERY_LENGTH:
+            yield self._sse("error", {"message": f"Query exceeds {constants.MAX_QUERY_LENGTH} characters."})
+            return
+
+        # ================================================================
+        # STAGE 2: Language Detection
+        # ================================================================
+        detected_lang, confidence = self._lang_detector.detect_with_confidence(query)
+        if confidence < 0.7 and request.language.value != "en":
+            detected_lang = request.language.value
+
+        # ================================================================
+        # STAGE 3: Translation to English
+        # ================================================================
+        query_en = query
+        if detected_lang != "en":
+            query_en = await self._translator.translate_to_english(query, detected_lang)
+
+        # ================================================================
+        # STAGE 4: Content Safety
+        # ================================================================
+        safety_result = self._content_filter.check_input(query_en)
+        if safety_result.is_blocked:
+            yield self._sse("blocked", {
+                "message": safety_result.message,
+                "reason": safety_result.reason,
+                "disclaimer": DISCLAIMERS.get(detected_lang, DISCLAIMERS["en"]),
+            })
+            return
+
+        # ================================================================
+        # STAGES 5 + 6 + 7 + 12: Parallelised
+        # ================================================================
+        expanded_query = self._expand_query(query_en, request)
+
+        helpline_task = asyncio.to_thread(self._helpline_detector.detect, query_en)
+        retrieve_task = self._retriever.retrieve(
+            query=expanded_query,
+            jurisdiction=request.state,
+        )
+        ipc_bns_task = self._get_ipc_bns_notes(query_en)
+
+        helpline_result, chunks, ipc_bns_notes = await asyncio.gather(
+            helpline_task, retrieve_task, ipc_bns_task
+        )
+
+        # ================================================================
+        # STAGE 8: Re-ranking
+        # ================================================================
+        chunks = self._rerank_and_dedup(chunks)
+
+        # ================================================================
+        # Build metadata and send it BEFORE tokens start
+        # ================================================================
+        helplines: list[dict] = []
+        if helpline_result.triggered:
+            helplines = [
+                {"name": h.name, "phone": h.phone, "description": h.description, "category": h.category}
+                for h in helpline_result.helplines
+            ]
+
+        references = [
+            {
+                "document_id": c.document_id,
+                "title": c.document_title,
+                "document_type": c.document_type,
+                "section": c.section_ref,
+                "relevance_score": round(c.score, 4),
+                "excerpt": c.content[:300] + "..." if len(c.content) > 300 else c.content,
+            }
+            for c in chunks
+        ]
+
+        conf = self._calculate_confidence(chunks)
+        safety_flag = SafetyFlag.SAFE
+        if helpline_result.triggered:
+            safety_flag = SafetyFlag.HELPLINE_TRIGGERED
+        if not chunks:
+            safety_flag = SafetyFlag.ESCALATION_SUGGESTED
+
+        yield self._sse("metadata", {
+            "references": references,
+            "helplines": helplines,
+            "confidence_score": round(conf, 3),
+            "safety_flag": safety_flag.value,
+            "ipc_bns_note": ipc_bns_notes or None,
+            "disclaimer": DISCLAIMERS.get(detected_lang, DISCLAIMERS["en"]),
+            "persona_used": request.persona.value,
+            "language_detected": detected_lang,
+        })
+
+        # ================================================================
+        # STAGE 9: Prompt Assembly
+        # ================================================================
+        context_text = self._build_context(chunks)
+        history_text = self._build_history(request.message_history)
+
+        prompt = QUERY_PROMPT.format(
+            persona=request.persona.value,
+            state=request.state or "Not specified",
+            profession=request.profession or "Not specified",
+            education=request.education or "Not specified",
+            language=detected_lang,
+            language_name=LANGUAGE_NAMES.get(detected_lang, "English"),
+            history=history_text,
+            context=context_text,
+            ipc_bns_notes=ipc_bns_notes or "None applicable",
+            query=query_en,
+        )
+
+        # ================================================================
+        # STAGE 10: Streaming LLM Generation
+        # ================================================================
+        collected_chunks: list[str] = []
+        async for token in self._llm.generate_stream(
+            prompt=prompt,
+            system_prompt=SYSTEM_PROMPT,
+            max_tokens=settings.LLM_MAX_TOKENS,
+            temperature=settings.LLM_TEMPERATURE,
+        ):
+            collected_chunks.append(token)
+            yield self._sse("token", {"text": token})
+
+        answer = "".join(collected_chunks)
+
+        # ================================================================
+        # STAGE 11: Output Safety (post-generation)
+        # ================================================================
+        output_safety = self._content_filter.check_output(answer)
+        if output_safety.is_blocked or output_safety.sanitized_text:
+            answer = output_safety.sanitized_text or (
+                "I apologize, but I cannot provide a response to this query. "
+                "Please consult a qualified advocate for assistance."
+            )
+
+        # ================================================================
+        # STAGE 13: Skipped — LLM already responded in the target language.
+        # No separate translation pass needed.
+        # ================================================================
+
+        elapsed_ms = round((time.perf_counter() - start) * 1000, 2)
+
+        yield self._sse("done", {
+            "answer": answer,
+            "answer_translated": None,
+            "processing_time_ms": elapsed_ms,
+        })
+
+    # ---- SSE Helper ----
+
+    @staticmethod
+    def _sse(event: str, data: dict) -> str:
+        """Format a single SSE event string."""
+        payload = json.dumps(data, ensure_ascii=False)
+        return f"event: {event}\ndata: {payload}\n\n"
 
     # ---- Helper Methods ----
 

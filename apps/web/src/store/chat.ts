@@ -45,6 +45,8 @@ interface ChatState {
   isLoadingChats: boolean;
   isLoadingMessages: boolean;
   isSending: boolean;
+  isStreaming: boolean;
+  streamingMessageId: string | null;
   isSimplifyingMessageId: string | null;
   error: string | null;
 
@@ -54,10 +56,14 @@ interface ChatState {
   deleteChat: (chatId: string) => Promise<void>;
   renameChat: (chatId: string, title: string) => Promise<void>;
   sendMessage: (chatId: string, query: string) => Promise<void>;
+  stopStreaming: () => void;
   simplifyMessage: (chatId: string, messageId: string) => Promise<void>;
   submitFeedback: (messageId: string, rating: 'HELPFUL' | 'NOT_HELPFUL', comment?: string) => Promise<void>;
   clearError: () => void;
 }
+
+// Module-level ref for the stream reader so stopStreaming can cancel it
+let _activeReader: ReadableStreamDefaultReader<Uint8Array> | null = null;
 
 export const useChatStore = create<ChatState>()((set, get) => ({
   chats: [],
@@ -65,6 +71,8 @@ export const useChatStore = create<ChatState>()((set, get) => ({
   isLoadingChats: false,
   isLoadingMessages: false,
   isSending: false,
+  isStreaming: false,
+  streamingMessageId: null,
   isSimplifyingMessageId: null,
   error: null,
 
@@ -159,70 +167,230 @@ export const useChatStore = create<ChatState>()((set, get) => ({
       createdAt: new Date().toISOString(),
     };
 
-    set((state) => ({
-      isSending: true,
-      activeChat: state.activeChat
-        ? {
-          ...state.activeChat,
-          messages: [...(state.activeChat.messages || []), userMessage],
-        }
-        : state.activeChat,
-    }));
+    // Add a placeholder assistant message that will be populated via streaming
+    const streamingAssistantId = `streaming-${Date.now()}`;
+    const streamingAssistant: Message = {
+      id: streamingAssistantId,
+      role: 'assistant',
+      content: '',
+      createdAt: new Date().toISOString(),
+    };
 
-    try {
-      const data = await chatApi.sendMessage(chatId, query);
-
-      // API returns { userMessage, assistantMessage, disclaimer }
-      const serverAssistant = data.assistantMessage || data.message || data;
-      const serverUser = data.userMessage;
-      const metadata = typeof serverAssistant.metadata === 'object' ? serverAssistant.metadata : {};
-
-      const assistantMessage: Message = {
-        id: serverAssistant.id,
-        role: 'assistant',
-        content: serverAssistant.content,
-        references: metadata.citedSections || serverAssistant.references,
-        helplines: metadata.helplines || serverAssistant.helplines,
-        ipcBnsNote: serverAssistant.ipcBnsNote,
-        confidenceScore: metadata.confidenceScore || serverAssistant.confidenceScore,
-        processingTimeMs: metadata.processingTimeMs || serverAssistant.processingTimeMs,
-        createdAt: serverAssistant.createdAt || new Date().toISOString(),
-      };
-
-      // Replace optimistic user message with server version (has real ID)
-      const realUserMessage: Message | null = serverUser
-        ? { ...userMessage, id: serverUser.id, createdAt: serverUser.createdAt || userMessage.createdAt }
-        : null;
-
-      // Auto-rename: use server title, or derive from first user message
-      const currentTitle = get().activeChat?.title;
-      const isGenericTitle = !currentTitle || currentTitle === 'New Chat' || currentTitle === 'Untitled Chat';
-      const serverTitle = data.chatTitle;
-      const autoTitle = isGenericTitle && !serverTitle
-        ? query.length > 40 ? query.slice(0, 40) + '…' : query
-        : null;
-      const finalTitle = serverTitle || autoTitle || currentTitle || 'New Chat';
-
+    // Auto-rename chat immediately on first message (don't wait for response)
+    const currentTitle = get().activeChat?.title;
+    const isGenericTitle = !currentTitle || currentTitle === 'New Chat' || currentTitle === 'Untitled Chat';
+    if (isGenericTitle) {
+      const autoTitle = query.length > 40 ? query.slice(0, 40) + '…' : query;
       set((state) => ({
-        isSending: false,
+        isSending: true,
+        isStreaming: false,
         activeChat: state.activeChat
           ? {
             ...state.activeChat,
-            title: finalTitle,
-            messages: [
-              ...(state.activeChat.messages || []).map((m) =>
-                m.id === userMessage.id && realUserMessage ? realUserMessage : m,
-              ),
-              assistantMessage,
-            ],
+            title: autoTitle,
+            messages: [...(state.activeChat.messages || []), userMessage],
           }
           : state.activeChat,
-        chats: state.chats.map((c) =>
-          c.id === chatId ? { ...c, title: finalTitle } : c,
-        ),
+        chats: state.chats.map((c) => c.id === chatId ? { ...c, title: autoTitle } : c),
       }));
+      // Fire-and-forget: persist the title to the backend
+      chatApi.update(chatId, { title: autoTitle }).catch(() => {});
+    } else {
+      set((state) => ({
+        isSending: true,
+        isStreaming: false,
+        activeChat: state.activeChat
+          ? {
+            ...state.activeChat,
+            messages: [...(state.activeChat.messages || []), userMessage],
+          }
+          : state.activeChat,
+      }));
+    }
+
+    try {
+      // Try streaming first
+      const response = await chatApi.sendMessageStream(chatId, query);
+
+      if (!response.body) {
+        throw new Error('No response body for streaming');
+      }
+
+      // Add the empty assistant message placeholder
+      set((state) => ({
+        isStreaming: true,
+        streamingMessageId: streamingAssistantId,
+        activeChat: state.activeChat
+          ? {
+            ...state.activeChat,
+            messages: [...(state.activeChat.messages || []), streamingAssistant],
+          }
+          : state.activeChat,
+      }));
+
+      // Parse SSE stream
+      const reader = response.body.getReader();
+      _activeReader = reader; // Store ref so stopStreaming can cancel
+      const decoder = new TextDecoder();
+      let buffer = '';
+      let accumulatedContent = '';
+      let metadata: Record<string, unknown> = {};
+      let wasCancelled = false;
+
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
+
+          // Process complete SSE events (separated by double newline)
+          const events = buffer.split('\n\n');
+          buffer = events.pop() || ''; // Keep incomplete last event in buffer
+
+          for (const eventBlock of events) {
+            if (!eventBlock.trim()) continue;
+
+            const eventMatch = eventBlock.match(/^event: (\w+)\ndata: (.+)$/s);
+            if (!eventMatch) continue;
+
+            const [, eventType, eventData] = eventMatch;
+            let parsed: Record<string, unknown>;
+            try {
+              parsed = JSON.parse(eventData);
+            } catch {
+              continue;
+            }
+
+            switch (eventType) {
+              case 'metadata':
+                metadata = parsed;
+                set((state) => ({
+                  activeChat: state.activeChat
+                    ? {
+                      ...state.activeChat,
+                      messages: (state.activeChat.messages || []).map((m) =>
+                        m.id === streamingAssistantId
+                          ? {
+                            ...m,
+                            references: parsed.references as Message['references'],
+                            helplines: parsed.helplines as Message['helplines'],
+                            ipcBnsNote: parsed.ipc_bns_note as string | undefined,
+                            confidenceScore: parsed.confidence_score as number | undefined,
+                          }
+                          : m,
+                      ),
+                    }
+                    : state.activeChat,
+                }));
+                break;
+
+              case 'token':
+                accumulatedContent += (parsed.text as string) || '';
+                set((state) => ({
+                  activeChat: state.activeChat
+                    ? {
+                      ...state.activeChat,
+                      messages: (state.activeChat.messages || []).map((m) =>
+                        m.id === streamingAssistantId
+                          ? { ...m, content: accumulatedContent }
+                          : m,
+                      ),
+                    }
+                    : state.activeChat,
+                }));
+                break;
+
+              case 'done': {
+                // Use accumulated streamed content as final (already in target language).
+                // Only fall back to answer/answer_translated if streaming produced nothing.
+                const finalContent = accumulatedContent || (parsed.answer_translated as string) || (parsed.answer as string) || '';
+                set((state) => ({
+                  isSending: false,
+                  isStreaming: false,
+                  streamingMessageId: null,
+                  activeChat: state.activeChat
+                    ? {
+                      ...state.activeChat,
+                      messages: (state.activeChat.messages || []).map((m) =>
+                        m.id === streamingAssistantId
+                          ? {
+                            ...m,
+                            content: finalContent,
+                            processingTimeMs: parsed.processing_time_ms as number | undefined,
+                          }
+                          : m,
+                      ),
+                    }
+                    : state.activeChat,
+                }));
+                break;
+              }
+
+              case 'blocked': {
+                const blockedContent = (parsed.message as string) || 'This query has been blocked by safety filters.';
+                set((state) => ({
+                  isSending: false,
+                  isStreaming: false,
+                  streamingMessageId: null,
+                  activeChat: state.activeChat
+                    ? {
+                      ...state.activeChat,
+                      messages: (state.activeChat.messages || []).map((m) =>
+                        m.id === streamingAssistantId
+                          ? { ...m, content: blockedContent }
+                          : m,
+                      ),
+                    }
+                    : state.activeChat,
+                }));
+                break;
+              }
+
+              case 'error': {
+                const errMsg = (parsed.message as string) || 'An error occurred while processing your query.';
+                set((state) => ({
+                  isSending: false,
+                  isStreaming: false,
+                  streamingMessageId: null,
+                  activeChat: state.activeChat
+                    ? {
+                      ...state.activeChat,
+                      messages: (state.activeChat.messages || []).map((m) =>
+                        m.id === streamingAssistantId
+                          ? { ...m, content: `⚠️ **Error:** ${errMsg}` }
+                          : m,
+                      ),
+                    }
+                    : state.activeChat,
+                }));
+                break;
+              }
+            }
+          }
+        }
+      } catch (readErr: any) {
+        // reader.cancel() throws — this is expected when user stops streaming
+        if (readErr?.message?.includes('cancel') || readErr?.name === 'AbortError') {
+          wasCancelled = true;
+        } else {
+          throw readErr;
+        }
+      } finally {
+        _activeReader = null;
+      }
+
+      // If cancelled by user, keep accumulated content as the final message
+      if (wasCancelled) {
+        set({ isSending: false, isStreaming: false, streamingMessageId: null });
+        return;
+      }
+
+      // Ensure isSending is false even if no "done" event was received
+      set({ isSending: false, isStreaming: false, streamingMessageId: null });
+
     } catch (err: any) {
-      // Determine specific error based on response
+      // Streaming failed — show error in the assistant message
       let errorMessage = 'Assistant unavailable at the moment.';
 
       if (err.name === 'AbortError' || err.message?.toLowerCase().includes('timeout') || err.message?.includes('Failed to fetch')) {
@@ -247,17 +415,32 @@ export const useChatStore = create<ChatState>()((set, get) => ({
       // Persist the error to the database so it's not lost on refresh
       chatApi.createSystemMessage(chatId, errorAssistantMessage.content).catch(console.error);
 
-      set((state) => ({
-        isSending: false,
-        activeChat: state.activeChat
-          ? {
-            ...state.activeChat,
-            messages: [...(state.activeChat.messages || []), errorAssistantMessage],
-          }
-          : state.activeChat,
-        error: null, // Wipe global error so we don't spam toasts
-      }));
+      set((state) => {
+        const messages = (state.activeChat?.messages || []).filter(
+          (m) => m.id !== streamingAssistantId
+        );
+        return {
+          isSending: false,
+          isStreaming: false,
+          activeChat: state.activeChat
+            ? {
+              ...state.activeChat,
+              messages: [...messages, errorAssistantMessage],
+            }
+            : state.activeChat,
+          error: null,
+        };
+      });
     }
+  },
+
+  stopStreaming: () => {
+    // Cancel the active stream reader
+    if (_activeReader) {
+      _activeReader.cancel().catch(() => {});
+      _activeReader = null;
+    }
+    set({ isSending: false, isStreaming: false, streamingMessageId: null });
   },
 
   simplifyMessage: async (chatId, messageId) => {

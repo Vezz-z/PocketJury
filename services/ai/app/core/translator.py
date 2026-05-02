@@ -21,8 +21,10 @@ LANGUAGE_NAMES = {
 
 class TranslatorService:
     """
-    Translation service using Claude for high-quality legal translation.
-    Handles en↔hi, en↔ta, en↔bn translations.
+    LLM-powered legal translation service (via OpenRouter).
+
+    Uses the configured LLM to perform high-quality translation of legal
+    content between English and Indian languages (en↔hi, en↔ta, en↔bn).
     """
 
     def __init__(self, llm_client: LLMClient) -> None:

@@ -28,9 +28,12 @@ export default function ChatConversationPage() {
     activeChat,
     isLoadingMessages,
     isSending,
+    isStreaming,
+    streamingMessageId,
     isSimplifyingMessageId,
     selectChat,
     sendMessage,
+    stopStreaming,
     simplifyMessage,
     submitFeedback,
   } = useChatStore();
@@ -41,7 +44,7 @@ export default function ChatConversationPage() {
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [activeChat?.messages?.length, isSending]);
+  }, [activeChat?.messages?.length, activeChat?.messages?.at(-1)?.content, isSending]);
 
   // Close menu on outside click
   useEffect(() => {
@@ -193,12 +196,13 @@ export default function ChatConversationPage() {
             <MessageBubble
               key={msg.id}
               message={msg}
+              isActivelyStreaming={msg.id === streamingMessageId}
               onSimplify={() => simplifyMessage(chatId, msg.id)}
               onFeedback={(rating) => submitFeedback(msg.id, rating)}
             />
           ))}
 
-          {isSending && <TypingIndicator />}
+          {isSending && !isStreaming && <TypingIndicator />}
           {isSimplifyingMessageId && <TypingIndicator text={t('simplifying')} />}
 
           <div ref={messagesEndRef} />
@@ -208,7 +212,7 @@ export default function ChatConversationPage() {
       {/* Input */}
       <div className="absolute bottom-0 left-0 right-0 p-3 sm:p-4 pointer-events-none">
         <div className="mx-auto max-w-3xl pointer-events-auto shadow-2xl rounded-[var(--radius-lg)]">
-          <MessageInput onSend={handleSend} disabled={isSending} />
+          <MessageInput onSend={handleSend} onStop={stopStreaming} disabled={isSending} isStreaming={isStreaming} />
         </div>
       </div>
     </div>

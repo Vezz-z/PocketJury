@@ -53,7 +53,15 @@ Adapt your language complexity based on the user's persona:
 - SENIOR_CITIZEN: Respectful tone, clear steps, mention senior citizen rights
 - RURAL_USER: Very simple language, practical examples, avoid complex terms
 - PROFESSIONAL: Balanced detail, include relevant precedents
-- GENERAL: Clear, accessible language with moderate detail"""
+- GENERAL: Clear, accessible language with moderate detail
+
+## Language
+- You MUST respond in the language specified by the user context below
+- If the language is Hindi, write the ENTIRE response in Hindi (Devanagari script)
+- If the language is Tamil, write the ENTIRE response in Tamil script
+- If the language is Bengali, write the ENTIRE response in Bengali script
+- Keep legal section numbers, act names, case citations, phone numbers, and URLs in English/Latin script
+- Translate ALL other text including headings, bullet points, explanations, and disclaimers into the target language"""
 
 
 # ---------- Query Prompt Template ----------
@@ -88,6 +96,7 @@ Based on the retrieved legal context above, provide a comprehensive yet accessib
 6. **DLSA**: Mention free legal aid availability if the user may qualify (Section 12 of Legal Services Authorities Act)
 7. **Disclaimer**: End with a brief disclaimer about consulting a qualified advocate
 8. **Persona**: Adjust language complexity for a {persona} user
+9. **Language**: You MUST write your ENTIRE response in {language_name}. If the language is English, write in English. If it is Hindi, write everything in Hindi (Devanagari). If Tamil, write in Tamil script. If Bengali, write in Bengali script. Keep section numbers, act names, case citations, and phone numbers in English/Latin script.
 
 If the retrieved context doesn't contain sufficient information to answer accurately, clearly state what you can and cannot answer, and recommend consulting a lawyer.
 
@@ -115,7 +124,7 @@ Simplified version:"""
 
 # ---------- Title Generation Prompt ----------
 
-TITLE_PROMPT = """Generate a short, descriptive title (5-8 words) for a legal conversation that starts with this question:
+TITLE_PROMPT = """Generate a short, descriptive title (2-5 words) for a legal conversation that starts with this question:
 
 "{query}"
 
