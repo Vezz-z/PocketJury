@@ -119,6 +119,41 @@ router.post(
   }
 );
 
+// POST /api/v1/chats/:chatId/messages/stream (SSE)
+router.post(
+  "/:chatId/messages/stream",
+  queryLimiter,
+  validate(sendMessageSchema),
+  auditLog("QUERY_STREAM", "message"),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { stream, userMessageId } = await chatService.sendMessageStream({
+        chatId: req.params.chatId as string,
+        userId: req.user!.sub,
+        content: req.body.content,
+      });
+
+      // Set SSE headers
+      res.setHeader("Content-Type", "text/event-stream");
+      res.setHeader("Cache-Control", "no-cache");
+      res.setHeader("Connection", "keep-alive");
+      res.setHeader("X-Accel-Buffering", "no"); // Bypass nginx buffering
+      res.setHeader("X-User-Message-Id", userMessageId);
+      res.flushHeaders();
+
+      // Pipe the stream directly to the response
+      stream.pipe(res);
+
+      // Handle client disconnect
+      req.on("close", () => {
+        stream.destroy();
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
+);
+
 // POST /api/v1/chats/:chatId/messages/:messageId/simplify
 router.post(
   "/:chatId/messages/:messageId/simplify",

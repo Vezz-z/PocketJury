@@ -5,14 +5,16 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { useTranslations } from 'next-intl';
-import { Send, Loader2 } from 'lucide-react';
+import { Send, Loader2, Square } from 'lucide-react';
 
 interface MessageInputProps {
   onSend: (message: string) => void;
+  onStop?: () => void;
   disabled?: boolean;
+  isStreaming?: boolean;
 }
 
-export function MessageInput({ onSend, disabled }: MessageInputProps) {
+export function MessageInput({ onSend, onStop, disabled, isStreaming }: MessageInputProps) {
   const t = useTranslations('chat');
   const [value, setValue] = useState('');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -57,18 +59,29 @@ export function MessageInput({ onSend, disabled }: MessageInputProps) {
           rows={1}
         />
       </div>
-      <button
-        className="btn-primary h-[44px] w-[44px] flex items-center justify-center p-0"
-        onClick={handleSubmit}
-        disabled={disabled || !value.trim()}
-        aria-label={t('send')}
-      >
-        {disabled ? (
-          <Loader2 className="h-5 w-5 animate-spin" />
-        ) : (
-          <Send className="h-5 w-5" />
-        )}
-      </button>
+      {isStreaming ? (
+        <button
+          className="h-[44px] w-[44px] flex items-center justify-center p-0 rounded-lg bg-red-500 hover:bg-red-600 text-white transition-colors"
+          onClick={onStop}
+          aria-label={t('stop') || 'Stop generating'}
+          title={t('stop') || 'Stop generating'}
+        >
+          <Square className="h-4 w-4 fill-current" />
+        </button>
+      ) : (
+        <button
+          className="btn-primary h-[44px] w-[44px] flex items-center justify-center p-0"
+          onClick={handleSubmit}
+          disabled={disabled || !value.trim()}
+          aria-label={t('send')}
+        >
+          {disabled ? (
+            <Loader2 className="h-5 w-5 animate-spin" />
+          ) : (
+            <Send className="h-5 w-5" />
+          )}
+        </button>
+      )}
     </div>
   );
 }

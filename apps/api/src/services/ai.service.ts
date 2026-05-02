@@ -53,6 +53,9 @@ export class AIService {
     this.timeout = 180000; // 180 seconds
   }
 
+  /**
+   * Standard (non-streaming) query — waits for full response.
+   */
   async query(input: QueryInput): Promise<QueryResponse> {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), this.timeout);
@@ -104,6 +107,44 @@ export class AIService {
       };
     } finally {
       clearTimeout(timeoutId);
+    }
+  }
+
+  /**
+   * Streaming query — returns a readable stream of SSE events from FastAPI.
+   * The caller is responsible for piping this to the client response.
+   */
+  async queryStream(input: QueryInput): Promise<Response> {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), this.timeout);
+
+    try {
+      const response = await fetch(`${this.baseUrl}/api/v1/query/stream`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          query: input.query,
+          user_id: input.userId,
+          chat_id: input.chatId,
+          persona: input.personaMode,
+          language: input.languageCode,
+          message_history: input.chatHistory,
+        }),
+        signal: controller.signal,
+      });
+
+      if (!response.ok) {
+        const error = await response.text();
+        logger.error({ status: response.status, error }, "AI stream service error");
+        throw new Error(`AI stream service returned ${response.status}: ${error}`);
+      }
+
+      // Clear timeout — the stream will manage its own lifecycle
+      clearTimeout(timeoutId);
+      return response;
+    } catch (err) {
+      clearTimeout(timeoutId);
+      throw err;
     }
   }
 

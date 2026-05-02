@@ -7,6 +7,7 @@ from __future__ import annotations
 import time
 import structlog
 from fastapi import APIRouter, Request, HTTPException
+from fastapi.responses import StreamingResponse
 from prometheus_client import Counter, Histogram
 
 from app.models.schemas import (
@@ -30,26 +31,13 @@ SIMPLIFY_COUNT = Counter("pocketjury_simplify_total", "Total simplification requ
 @router.post("/query", response_model=QueryResponse)
 async def process_query(request: Request, body: QueryRequest) -> QueryResponse:
     """
-    Process a legal query through the full 13-stage RAG pipeline.
+    Process a legal query through the full 13-stage RAG pipeline (non-streaming).
 
-    Stages:
-    1. Input sanitisation & length validation
-    2. Language detection
-    3. Translation to English (if needed)
-    4. Content safety pre-check
-    5. Helpline/crisis detection
-    6. Query expansion & persona context
-    7. Hybrid retrieval (vector + full-text + RRF)
-    8. Re-ranking & deduplication
-    9. Prompt assembly with persona adaptation
-    10. LLM generation (Claude 3.5 Sonnet via Bedrock)
-    11. Output safety validation
-    12. IPC→BNS cross-reference
-    13. Translation back to user language & response formatting
+    Returns the complete response as a single JSON payload after all stages
+    finish. For real-time token delivery, use ``POST /api/v1/query/stream``.
     """
     start = time.perf_counter()
 
-    # Get services from app state
     pipeline = RAGPipeline(
         embedder=request.app.state.embedder,
         retriever=request.app.state.retriever,
@@ -91,6 +79,52 @@ async def process_query(request: Request, body: QueryRequest) -> QueryResponse:
     )
 
     return response
+
+
+@router.post("/query/stream")
+async def process_query_stream(request: Request, body: QueryRequest) -> StreamingResponse:
+    """
+    Process a legal query and stream the LLM response via Server-Sent Events.
+
+    The pipeline executes stages 1–9 (retrieval, safety, prompt assembly),
+    then streams LLM tokens in real-time. Metadata (references, helplines)
+    is sent as the first SSE event before any tokens arrive.
+
+    SSE event types:
+    - ``metadata``: references, helplines, confidence, safety flag
+    - ``token``:    individual LLM text chunks
+    - ``done``:     final answer, translated text, processing time
+    - ``blocked``:  query was rejected by safety filters
+    - ``error``:    pipeline error
+    """
+    pipeline = RAGPipeline(
+        embedder=request.app.state.embedder,
+        retriever=request.app.state.retriever,
+        llm_client=request.app.state.llm_client,
+        translator=request.app.state.translator,
+        language_detector=request.app.state.language_detector,
+        content_filter=request.app.state.content_filter,
+        helpline_detector=request.app.state.helpline_detector,
+    )
+
+    async def event_generator():
+        try:
+            async for event in pipeline.process_stream(body):
+                yield event
+        except Exception as e:
+            logger.error("Streaming pipeline error", error=str(e), user_id=body.user_id, exc_info=True)
+            import json
+            yield f"event: error\ndata: {json.dumps({'message': 'Failed to process query'})}\n\n"
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",  # Disable nginx buffering
+        },
+    )
 
 
 @router.post("/simplify", response_model=SimplifyResponse)
