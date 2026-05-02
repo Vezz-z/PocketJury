@@ -128,6 +128,17 @@ export const chatApi = {
       timeout: 180000, // 180s for AI processing
     }).then((r) => r.json()),
 
+  /**
+   * Stream the AI response via SSE. Returns the raw Response so the caller
+   * can read the body as a ReadableStream.
+   */
+  sendMessageStream: (chatId: string, query: string) =>
+    fetchWithAuth(`/chats/${chatId}/messages/stream`, {
+      method: 'POST',
+      body: JSON.stringify({ content: query }),
+      timeout: 180000,
+    }),
+
   simplify: (chatId: string, messageId: string) =>
     fetchWithAuth(`/chats/${chatId}/messages/${messageId}/simplify`, { method: 'POST' }).then((r) => r.json()),
 

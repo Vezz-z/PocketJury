@@ -209,7 +209,8 @@
     "chatRenamed": "चैट का नाम बदला गया",
     "renameError": "चैट का नाम बदलने में विफल",
     "simplified": "सरलीकृत",
-    "rename": "नाम बदलें"
+    "rename": "नाम बदलें",
+    "stop": "उत्तर रोकें"
   },
   "settings": {
     "title": "सेटिंग्स",

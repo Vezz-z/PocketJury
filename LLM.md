@@ -1073,6 +1073,169 @@ asyncio.run(evaluate())
 
 ---
 
+## 11. Future: Latency Optimisation with Local LLM
+
+> **Status:** Not yet implemented. This section documents strategies for reducing
+> response latency when migrating from OpenRouter (`gpt-oss-120b:free`) to a local
+> LLM via Ollama. These techniques complement the SSE streaming already implemented
+> in the current pipeline.
+
+### 11.1 Problem: Sequential Translation Bottleneck
+
+For non-English queries, the current pipeline makes **3 sequential LLM calls**:
+
+```
+User Query (Hindi) → [Translate to English] → [RAG Generation] → [Translate back to Hindi]
+                          ~8-12s                    ~10-15s              ~10-15s
+                     ─────────── Total: 30-40 seconds ───────────
+```
+
+With SSE streaming, users now see tokens arriving after ~2-4 seconds for English queries.
+However, non-English queries still have a ~10-15 second delay before the first token
+because both translation steps must complete before the main LLM generation begins.
+
+### 11.2 Strategy A: Hybrid Model Routing
+
+Use a **fast local LLM** (via Ollama) for translation while keeping the cloud LLM for
+the critical legal reasoning stage:
+
+```
+User Query (Hindi) → [Local: Translate to English] → [Cloud: RAG Generation] → [Local: Translate back]
+                           ~0.5-1s (Ollama)              ~10-15s (OpenRouter)       ~0.5-1s (Ollama)
+                     ─────────── Total: ~12-17 seconds ───────────
+```
+
+**Implementation outline:**
+
+```python
+# In config.py
+TRANSLATION_PROVIDER: str = "ollama"  # "ollama" or "openrouter"
+OLLAMA_BASE_URL: str = "http://host.docker.internal:11434/v1"
+TRANSLATION_MODEL_ID: str = "llama3.1:8b"
+
+# In translator.py — modify to use a separate LLM client for translation
+class TranslatorService:
+    def __init__(self, cloud_llm: LLMClient, local_llm: LLMClient | None = None):
+        self._llm = local_llm if local_llm else cloud_llm
+```
+
+**Impact:** Eliminates ~20 seconds of translation overhead for non-English queries.
+
+### 11.3 Strategy B: Dedicated Translation Model
+
+Replace the general-purpose LLM translation with a purpose-built neural machine
+translation model from Helsinki-NLP (runs on CPU in <1 second):
+
+| Language Pair | Model | Size | Speed (CPU) |
+|--------------|-------|------|-------------|
+| Hindi → English | `Helsinki-NLP/opus-mt-hi-en` | ~300 MB | ~0.3s |
+| English → Hindi | `Helsinki-NLP/opus-mt-en-hi` | ~300 MB | ~0.3s |
+| Tamil → English | `Helsinki-NLP/opus-mt-ta-en` | ~300 MB | ~0.3s |
+| Bengali → English | `Helsinki-NLP/opus-mt-bn-en` | ~300 MB | ~0.3s |
+
+```python
+# Install: pip install transformers sentencepiece
+from transformers import MarianMTModel, MarianTokenizer
+
+class NMTTranslator:
+    def __init__(self):
+        self._models = {}
+    
+    def _load_model(self, src: str, tgt: str):
+        model_name = f"Helsinki-NLP/opus-mt-{src}-{tgt}"
+        tokenizer = MarianTokenizer.from_pretrained(model_name)
+        model = MarianMTModel.from_pretrained(model_name)
+        return tokenizer, model
+    
+    def translate(self, text: str, src: str, tgt: str) -> str:
+        key = f"{src}-{tgt}"
+        if key not in self._models:
+            self._models[key] = self._load_model(src, tgt)
+        tokenizer, model = self._models[key]
+        inputs = tokenizer(text, return_tensors="pt", truncation=True, max_length=512)
+        translated = model.generate(**inputs)
+        return tokenizer.decode(translated[0], skip_special_tokens=True)
+```
+
+**Trade-off:** Lower translation quality than LLM-based translation for complex legal
+sentences, but ~30x faster. Can be combined with Strategy A as a fallback.
+
+### 11.4 Strategy C: Streaming with Ollama
+
+Ollama natively supports the OpenAI-compatible streaming API. The `generate_stream()`
+method added to `llm_client.py` works unchanged with Ollama — just point the config
+to the local endpoint:
+
+```env
+# .env — switch to Ollama for all LLM calls
+OLLAMA_BASE_URL=http://host.docker.internal:11434/v1
+LLM_MODEL_ID=llama3.1:8b
+```
+
+With a GPU (RTX 3060+), expect:
+- **Time to first token:** ~0.5-1s (vs 2-4s with OpenRouter)
+- **Token throughput:** ~30-50 tokens/sec (vs variable with OpenRouter free tier)
+- **No rate limits:** Unlimited queries per day
+
+### 11.5 Strategy D: Semantic Caching with Redis
+
+Cache LLM responses for semantically similar queries. Common legal questions like
+"How to file an FIR?" or "What are my rights if arrested?" can return cached answers
+in <1 second:
+
+```python
+import numpy as np
+from app.core.embedder import EmbedderService
+
+class SemanticCache:
+    """Cache LLM responses keyed by query embedding similarity."""
+    
+    SIMILARITY_THRESHOLD = 0.92  # Only cache hits with >92% similarity
+    TTL = 86400  # 24 hours
+    
+    def __init__(self, embedder: EmbedderService, redis_client):
+        self._embedder = embedder
+        self._redis = redis_client
+    
+    async def get(self, query: str) -> str | None:
+        query_embedding = self._embedder.embed_query(query)
+        # Search cached embeddings for similar queries
+        cached_keys = await self._redis.keys("cache:query:*")
+        for key in cached_keys:
+            cached = await self._redis.hgetall(key)
+            cached_embedding = np.frombuffer(cached["embedding"], dtype=np.float32)
+            similarity = np.dot(query_embedding, cached_embedding)
+            if similarity > self.SIMILARITY_THRESHOLD:
+                return cached["response"]
+        return None
+    
+    async def set(self, query: str, response: str):
+        embedding = self._embedder.embed_query(query)
+        key = f"cache:query:{hash(query)}"
+        await self._redis.hset(key, mapping={
+            "embedding": np.array(embedding, dtype=np.float32).tobytes(),
+            "response": response,
+        })
+        await self._redis.expire(key, self.TTL)
+```
+
+**Impact:** Cache hit rate of ~15-25% for typical legal information queries,
+eliminating LLM calls entirely for those queries.
+
+### 11.6 Combined Impact (All Strategies)
+
+| Scenario | Current | With All Optimisations |
+|----------|---------|----------------------|
+| English query (cache hit) | 15-20s | **<1s** |
+| English query (cache miss) | 15-20s | **0.5-1s** TTFT |
+| Hindi query (cache miss) | 30-40s | **1-2s** TTFT |
+| Total pipeline (Hindi, worst case) | 30-40s | **~13-17s** total |
+
+> **Recommendation:** Implement in this order: C (Ollama streaming) → D (semantic cache)
+> → A (hybrid routing) → B (NMT translation). Each step independently improves latency.
+
+---
+
 ## More Resources
 
 - [Ollama Documentation](https://github.com/ollama/ollama)

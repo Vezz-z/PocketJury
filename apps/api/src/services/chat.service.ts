@@ -2,6 +2,7 @@
 // PocketJury API — Chat Service
 // ==============================================================================
 
+import { Readable } from "node:stream";
 import prisma from "../config/database";
 import redis from "../config/redis";
 import { aiService } from "./ai.service";
@@ -129,6 +130,9 @@ export class ChatService {
     return message;
   }
 
+  /**
+   * Non-streaming message send — waits for full AI response before returning.
+   */
   async sendMessage(input: SendMessageInput) {
     const chat = await prisma.chat.findFirst({
       where: { id: input.chatId, userId: input.userId },
@@ -176,7 +180,7 @@ export class ChatService {
     });
 
     try {
-      // Call AI service
+      // Call AI service (non-streaming)
       const aiResponse = await aiService.query({
         query: sanitizedContent,
         userId: input.userId,
@@ -227,6 +231,148 @@ export class ChatService {
       logger.error({ err, chatId: input.chatId }, "AI service query failed");
       throw createError("Failed to generate response. Please try again.", 503);
     }
+  }
+
+  /**
+   * Streaming message send — pipes SSE events from the AI service to the client.
+   *
+   * Returns a Node.js Readable stream that the Express route can pipe to `res`.
+   * After the stream ends, the full assistant message is saved to the database.
+   */
+  async sendMessageStream(input: SendMessageInput): Promise<{ stream: Readable; userMessageId: string }> {
+    const chat = await prisma.chat.findFirst({
+      where: { id: input.chatId, userId: input.userId },
+      include: {
+        messages: {
+          orderBy: { createdAt: "desc" },
+          take: 5,
+          select: { role: true, content: true },
+        },
+      },
+    });
+
+    if (!chat) throw createError("Chat not found", 404);
+
+    // Sanitize input
+    const sanitizedContent = input.content
+      .replace(/<[^>]*>/g, "")
+      .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, "")
+      .trim();
+
+    if (!sanitizedContent || sanitizedContent.length > 2000) {
+      throw createError("Message must be between 1 and 2000 characters", 400);
+    }
+
+    // Save user message
+    const userMessage = await prisma.message.create({
+      data: {
+        chatId: input.chatId,
+        role: "USER",
+        content: sanitizedContent,
+        languageCode: chat.languageCode,
+      },
+    });
+
+    // Build chat history
+    const chatHistory = chat.messages.reverse().map((m: any) => ({
+      role: m.role.toLowerCase(),
+      content: m.content,
+    }));
+
+    // Get user profile for persona
+    const profile = await prisma.profile.findUnique({
+      where: { userId: input.userId },
+      select: { personaMode: true },
+    });
+
+    // Get the raw SSE stream from FastAPI
+    const aiResponse = await aiService.queryStream({
+      query: sanitizedContent,
+      userId: input.userId,
+      chatId: input.chatId,
+      personaMode: profile?.personaMode || chat.personaMode,
+      languageCode: chat.languageCode,
+      chatHistory,
+    });
+
+    if (!aiResponse.body) {
+      throw createError("AI service returned empty stream", 503);
+    }
+
+    // Use a PassThrough stream — actively pump data from the web ReadableStream
+    // into it so each chunk is forwarded to the client immediately.
+    const { PassThrough } = await import("node:stream");
+    const passthrough = new PassThrough();
+    const chatId = input.chatId;
+    const isFirstMessage = chatHistory.length === 0;
+    const firstMessageContent = sanitizedContent;
+    const collectedChunks: string[] = [];
+
+    // Pump the web ReadableStream into the PassThrough in the background
+    const reader = aiResponse.body.getReader();
+    const decoder = new TextDecoder();
+
+    (async () => {
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          const text = decoder.decode(value, { stream: true });
+          collectedChunks.push(text);
+          passthrough.write(text);
+        }
+      } catch (err) {
+        logger.error({ err, chatId }, "Error reading AI stream");
+      } finally {
+        passthrough.end();
+      }
+
+      // After stream ends, save the assistant message to the database
+      try {
+        const fullText = collectedChunks.join("");
+        const doneMatch = fullText.match(/event: done\ndata: (.+)\n/);
+        const metaMatch = fullText.match(/event: metadata\ndata: (.+)\n/);
+
+        if (doneMatch) {
+          const doneData = JSON.parse(doneMatch[1]);
+          const metaData = metaMatch ? JSON.parse(metaMatch[1]) : {};
+          const content = doneData.answer_translated || doneData.answer || "";
+
+          await prisma.message.create({
+            data: {
+              chatId,
+              role: "ASSISTANT",
+              content,
+              contentOriginalLanguage: metaData.language_detected !== "en" ? content : null,
+              languageCode: metaData.language_detected || "en",
+              metadata: {
+                citedSections: metaData.references || [],
+                confidenceScore: metaData.confidence_score || 0,
+                processingTimeMs: doneData.processing_time_ms || 0,
+                helplines: metaData.helplines || [],
+              },
+            },
+          });
+
+          if (isFirstMessage) {
+            const title = firstMessageContent.slice(0, 80) + (firstMessageContent.length > 80 ? "..." : "");
+            await prisma.chat.update({
+              where: { id: chatId },
+              data: { title },
+            });
+          }
+
+          await prisma.chat.update({
+            where: { id: chatId },
+            data: { updatedAt: new Date() },
+          });
+        }
+      } catch (err) {
+        logger.error({ err, chatId }, "Failed to save streamed assistant message");
+      }
+    })();
+
+    return { stream: passthrough as Readable, userMessageId: userMessage.id };
   }
 
   async simplifyMessage(messageId: string, userId: string) {
