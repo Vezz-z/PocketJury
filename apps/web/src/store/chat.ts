@@ -4,6 +4,7 @@
 
 import { create } from 'zustand';
 import { chatApi, feedbackApi } from '@/lib/api';
+import { toast } from 'sonner';
 
 interface Message {
   id: string;
@@ -35,6 +36,7 @@ interface Chat {
   id: string;
   title: string;
   messagesCount: number;
+  lastMessage?: string;
   updatedAt: string;
   messages?: Message[];
 }
@@ -62,8 +64,9 @@ interface ChatState {
   clearError: () => void;
 }
 
-// Module-level ref for the stream reader so stopStreaming can cancel it
+// Module-level refs for stream management
 let _activeReader: ReadableStreamDefaultReader<Uint8Array> | null = null;
+let _activeStreamChatId: string | null = null; // Which chat is currently streaming
 
 export const useChatStore = create<ChatState>()((set, get) => ({
   chats: [],
@@ -80,7 +83,11 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     set({ isLoadingChats: true });
     try {
       const data = await chatApi.list();
-      const chatList = Array.isArray(data) ? data : Array.isArray(data?.chats) ? data.chats : Array.isArray(data?.data) ? data.data : [];
+      const rawList = Array.isArray(data) ? data : Array.isArray(data?.chats) ? data.chats : Array.isArray(data?.data) ? data.data : [];
+      const chatList = rawList.map((c: any) => ({
+        ...c,
+        lastMessage: c.lastMessage || null,
+      }));
       set({ chats: chatList, isLoadingChats: false });
     } catch (err: unknown) {
       set({ chats: [], error: 'Failed to load chats', isLoadingChats: false });
@@ -104,10 +111,17 @@ export const useChatStore = create<ChatState>()((set, get) => ({
   },
 
   selectChat: async (chatId) => {
+    // If switching away from a streaming chat, DON'T cancel the reader.
+    // The background stream continues; the reader is only cancelled via stopStreaming.
+    const prev = get();
+    if (prev.isStreaming && prev.activeChat?.id && prev.activeChat.id !== chatId) {
+      // Reset UI state only — the stream reader continues in the background
+      set({ isSending: false, isStreaming: false, streamingMessageId: null });
+    }
+
     set({ isLoadingMessages: true });
     try {
       const data = await chatApi.get(chatId);
-      // Normalize message roles: API returns uppercase (USER/ASSISTANT), frontend expects lowercase
       const normalizedMessages = (data.messages || []).map((m: Record<string, unknown>) => ({
         ...m,
         role: typeof m.role === 'string' ? m.role.toLowerCase() : m.role,
@@ -176,36 +190,45 @@ export const useChatStore = create<ChatState>()((set, get) => ({
       createdAt: new Date().toISOString(),
     };
 
-    // Auto-rename chat immediately on first message (don't wait for response)
+    // Keep title as "New Chat" — the LLM-generated title will arrive via polling.
     const currentTitle = get().activeChat?.title;
     const isGenericTitle = !currentTitle || currentTitle === 'New Chat' || currentTitle === 'Untitled Chat';
+
+    set((state) => ({
+      isSending: true,
+      isStreaming: false,
+      activeChat: state.activeChat
+        ? {
+          ...state.activeChat,
+          messages: [...(state.activeChat.messages || []), userMessage],
+        }
+        : state.activeChat,
+    }));
+
+    // Start title polling immediately for first messages
+    // (backend now fires generateTitle before the stream, so it arrives faster)
     if (isGenericTitle) {
-      const autoTitle = query.length > 40 ? query.slice(0, 40) + '…' : query;
-      set((state) => ({
-        isSending: true,
-        isStreaming: false,
-        activeChat: state.activeChat
-          ? {
-            ...state.activeChat,
-            title: autoTitle,
-            messages: [...(state.activeChat.messages || []), userMessage],
-          }
-          : state.activeChat,
-        chats: state.chats.map((c) => c.id === chatId ? { ...c, title: autoTitle } : c),
-      }));
-      // Fire-and-forget: persist the title to the backend
-      chatApi.update(chatId, { title: autoTitle }).catch(() => {});
-    } else {
-      set((state) => ({
-        isSending: true,
-        isStreaming: false,
-        activeChat: state.activeChat
-          ? {
-            ...state.activeChat,
-            messages: [...(state.activeChat.messages || []), userMessage],
-          }
-          : state.activeChat,
-      }));
+      const pollForTitle = (attemptsLeft: number) => {
+        if (attemptsLeft <= 0) return;
+        setTimeout(() => {
+          chatApi.get(chatId).then((updatedChat: any) => {
+            const newTitle = updatedChat?.title;
+            if (newTitle && newTitle !== currentTitle && newTitle !== 'New Chat') {
+              set((state) => ({
+                activeChat: state.activeChat?.id === chatId
+                  ? { ...state.activeChat, title: newTitle }
+                  : state.activeChat,
+                chats: state.chats.map((c) =>
+                  c.id === chatId ? { ...c, title: newTitle } : c,
+                ),
+              }));
+            } else {
+              pollForTitle(attemptsLeft - 1);
+            }
+          }).catch(() => {});
+        }, 3000);
+      };
+      pollForTitle(6);
     }
 
     try {
@@ -216,11 +239,14 @@ export const useChatStore = create<ChatState>()((set, get) => ({
         throw new Error('No response body for streaming');
       }
 
-      // Add the empty assistant message placeholder
+      // Track which chat this stream belongs to
+      _activeStreamChatId = chatId;
+
+      // Add the empty assistant message placeholder (only if still on same chat)
       set((state) => ({
-        isStreaming: true,
-        streamingMessageId: streamingAssistantId,
-        activeChat: state.activeChat
+        isStreaming: state.activeChat?.id === chatId ? true : state.isStreaming,
+        streamingMessageId: state.activeChat?.id === chatId ? streamingAssistantId : state.streamingMessageId,
+        activeChat: state.activeChat?.id === chatId
           ? {
             ...state.activeChat,
             messages: [...(state.activeChat.messages || []), streamingAssistant],
@@ -265,105 +291,112 @@ export const useChatStore = create<ChatState>()((set, get) => ({
             switch (eventType) {
               case 'metadata':
                 metadata = parsed;
-                set((state) => ({
-                  activeChat: state.activeChat
-                    ? {
-                      ...state.activeChat,
-                      messages: (state.activeChat.messages || []).map((m) =>
-                        m.id === streamingAssistantId
-                          ? {
-                            ...m,
-                            references: parsed.references as Message['references'],
-                            helplines: parsed.helplines as Message['helplines'],
-                            ipcBnsNote: parsed.ipc_bns_note as string | undefined,
-                            confidenceScore: parsed.confidence_score as number | undefined,
-                          }
-                          : m,
-                      ),
-                    }
-                    : state.activeChat,
-                }));
+                // Only update UI if user is still viewing this chat
+                if (get().activeChat?.id === chatId) {
+                  set((state) => ({
+                    activeChat: state.activeChat?.id === chatId
+                      ? {
+                        ...state.activeChat,
+                        messages: (state.activeChat.messages || []).map((m) =>
+                          m.id === streamingAssistantId
+                            ? {
+                              ...m,
+                              references: parsed.references as Message['references'],
+                              helplines: parsed.helplines as Message['helplines'],
+                              ipcBnsNote: parsed.ipc_bns_note as string | undefined,
+                              confidenceScore: parsed.confidence_score as number | undefined,
+                            }
+                            : m,
+                        ),
+                      }
+                      : state.activeChat,
+                  }));
+                }
                 break;
 
               case 'token':
                 accumulatedContent += (parsed.text as string) || '';
-                set((state) => ({
-                  activeChat: state.activeChat
-                    ? {
-                      ...state.activeChat,
-                      messages: (state.activeChat.messages || []).map((m) =>
-                        m.id === streamingAssistantId
-                          ? { ...m, content: accumulatedContent }
-                          : m,
-                      ),
-                    }
-                    : state.activeChat,
-                }));
+                // Only update UI if user is still viewing this chat
+                if (get().activeChat?.id === chatId) {
+                  set((state) => ({
+                    activeChat: state.activeChat?.id === chatId
+                      ? {
+                        ...state.activeChat,
+                        messages: (state.activeChat.messages || []).map((m) =>
+                          m.id === streamingAssistantId
+                            ? { ...m, content: accumulatedContent }
+                            : m,
+                        ),
+                      }
+                      : state.activeChat,
+                  }));
+                }
                 break;
 
               case 'done': {
-                // Use accumulated streamed content as final (already in target language).
-                // Only fall back to answer/answer_translated if streaming produced nothing.
                 const finalContent = accumulatedContent || (parsed.answer_translated as string) || (parsed.answer as string) || '';
-                set((state) => ({
-                  isSending: false,
-                  isStreaming: false,
-                  streamingMessageId: null,
-                  activeChat: state.activeChat
-                    ? {
-                      ...state.activeChat,
-                      messages: (state.activeChat.messages || []).map((m) =>
-                        m.id === streamingAssistantId
-                          ? {
-                            ...m,
-                            content: finalContent,
-                            processingTimeMs: parsed.processing_time_ms as number | undefined,
-                          }
-                          : m,
-                      ),
-                    }
-                    : state.activeChat,
-                }));
+                const isStillOnChat = get().activeChat?.id === chatId;
+                if (isStillOnChat) {
+                  set((state) => ({
+                    isSending: false,
+                    isStreaming: false,
+                    streamingMessageId: null,
+                    activeChat: state.activeChat?.id === chatId
+                      ? {
+                        ...state.activeChat,
+                        messages: (state.activeChat.messages || []).map((m) =>
+                          m.id === streamingAssistantId
+                            ? { ...m, content: finalContent, processingTimeMs: parsed.processing_time_ms as number | undefined }
+                            : m,
+                        ),
+                      }
+                      : state.activeChat,
+                  }));
+                }
                 break;
               }
 
               case 'blocked': {
                 const blockedContent = (parsed.message as string) || 'This query has been blocked by safety filters.';
-                set((state) => ({
-                  isSending: false,
-                  isStreaming: false,
-                  streamingMessageId: null,
-                  activeChat: state.activeChat
-                    ? {
-                      ...state.activeChat,
-                      messages: (state.activeChat.messages || []).map((m) =>
-                        m.id === streamingAssistantId
-                          ? { ...m, content: blockedContent }
-                          : m,
-                      ),
-                    }
-                    : state.activeChat,
-                }));
+                if (get().activeChat?.id === chatId) {
+                  set((state) => ({
+                    isSending: false,
+                    isStreaming: false,
+                    streamingMessageId: null,
+                    activeChat: state.activeChat?.id === chatId
+                      ? {
+                        ...state.activeChat,
+                        messages: (state.activeChat.messages || []).map((m) =>
+                          m.id === streamingAssistantId
+                            ? { ...m, content: blockedContent }
+                            : m,
+                        ),
+                      }
+                      : state.activeChat,
+                  }));
+                }
                 break;
               }
 
               case 'error': {
                 const errMsg = (parsed.message as string) || 'An error occurred while processing your query.';
-                set((state) => ({
-                  isSending: false,
-                  isStreaming: false,
-                  streamingMessageId: null,
-                  activeChat: state.activeChat
-                    ? {
-                      ...state.activeChat,
-                      messages: (state.activeChat.messages || []).map((m) =>
-                        m.id === streamingAssistantId
-                          ? { ...m, content: `⚠️ **Error:** ${errMsg}` }
-                          : m,
-                      ),
-                    }
-                    : state.activeChat,
-                }));
+                if (get().activeChat?.id === chatId) {
+                  set((state) => ({
+                    isSending: false,
+                    isStreaming: false,
+                    streamingMessageId: null,
+                    activeChat: state.activeChat?.id === chatId
+                      ? {
+                        ...state.activeChat,
+                        messages: (state.activeChat.messages || []).map((m) =>
+                          m.id === streamingAssistantId
+                            ? { ...m, content: `⚠️ **Error:** ${errMsg}` }
+                            : m,
+                        ),
+                      }
+                      : state.activeChat,
+                  }));
+                }
                 break;
               }
             }
@@ -382,15 +415,34 @@ export const useChatStore = create<ChatState>()((set, get) => ({
 
       // If cancelled by user, keep accumulated content as the final message
       if (wasCancelled) {
-        set({ isSending: false, isStreaming: false, streamingMessageId: null });
+        if (get().activeChat?.id === chatId) {
+          set({ isSending: false, isStreaming: false, streamingMessageId: null });
+        }
         return;
       }
 
-      // Ensure isSending is false even if no "done" event was received
-      set({ isSending: false, isStreaming: false, streamingMessageId: null });
+      // Clean up streaming state only if we're still on the same chat
+      const isStillOnThisChat = get().activeChat?.id === chatId;
+      if (isStillOnThisChat) {
+        set({ isSending: false, isStreaming: false, streamingMessageId: null });
+      } else {
+        // Stream finished in the background — notify the user
+        _activeStreamChatId = null;
+        const chatTitle = get().chats.find((c) => c.id === chatId)?.title || 'a chat';
+        const locale = typeof window !== 'undefined' ? (window.location.pathname.split('/')[1] || 'en') : 'en';
+        toast.info(`Response ready in "${chatTitle}"`, {
+          duration: 10000,
+          action: {
+            label: 'View',
+            onClick: () => { window.location.href = `/${locale}/chat/${chatId}`; },
+          },
+        });
+      }
 
     } catch (err: any) {
-      // Streaming failed — show error in the assistant message
+      // Only update UI if we're still on the same chat
+      if (get().activeChat?.id !== chatId) return;
+
       let errorMessage = 'Assistant unavailable at the moment.';
 
       if (err.name === 'AbortError' || err.message?.toLowerCase().includes('timeout') || err.message?.includes('Failed to fetch')) {
@@ -412,7 +464,6 @@ export const useChatStore = create<ChatState>()((set, get) => ({
         createdAt: new Date().toISOString(),
       };
 
-      // Persist the error to the database so it's not lost on refresh
       chatApi.createSystemMessage(chatId, errorAssistantMessage.content).catch(console.error);
 
       set((state) => {
@@ -422,7 +473,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
         return {
           isSending: false,
           isStreaming: false,
-          activeChat: state.activeChat
+          activeChat: state.activeChat?.id === chatId
             ? {
               ...state.activeChat,
               messages: [...messages, errorAssistantMessage],
@@ -435,10 +486,11 @@ export const useChatStore = create<ChatState>()((set, get) => ({
   },
 
   stopStreaming: () => {
-    // Cancel the active stream reader
-    if (_activeReader) {
+    // Cancel the active stream reader only for the current chat
+    if (_activeReader && _activeStreamChatId === get().activeChat?.id) {
       _activeReader.cancel().catch(() => {});
       _activeReader = null;
+      _activeStreamChatId = null;
     }
     set({ isSending: false, isStreaming: false, streamingMessageId: null });
   },
@@ -451,49 +503,36 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     const targetIndex = activeChat.messages.findIndex((m) => m.id === messageId);
     if (targetIndex === -1) return;
 
-    // Cache original to restore if needed
-    const originalMessage = activeChat.messages[targetIndex];
-
-    // Optimistically truncate the array (removing the message we are simplifying and all below it)
-    const optimisticallyTruncatedMessages = activeChat.messages.slice(0, targetIndex);
+    // Optimistically truncate: remove the target message and everything below
+    const truncatedMessages = activeChat.messages.slice(0, targetIndex);
 
     set({
       isSimplifyingMessageId: messageId,
-      activeChat: {
-        ...activeChat,
-        messages: optimisticallyTruncatedMessages,
-      }
+      activeChat: { ...activeChat, messages: truncatedMessages },
     });
 
     try {
-      const data = await chatApi.simplify(chatId, messageId);
+      // Call the simplify API (backend replaces content + deletes subsequent messages)
+      await chatApi.simplify(chatId, messageId);
 
-      set((state) => {
-        if (!state.activeChat) return state;
+      // Re-fetch the full chat to get the server-authoritative state
+      const data = await chatApi.get(chatId);
+      const normalizedMessages = (data.messages || []).map((m: Record<string, unknown>) => ({
+        ...m,
+        role: typeof m.role === 'string' ? m.role.toLowerCase() : m.role,
+      }));
 
-        // Re-append the modified message
-        const simplifiedMessage = {
-          ...originalMessage,
-          content: data.content,
-          simplifiedContent: undefined,
-        };
-
-        return {
-          activeChat: {
-            ...state.activeChat,
-            messages: [...(state.activeChat.messages || []), simplifiedMessage],
-          }
-        };
-      });
-    } catch (error) {
-      console.error('Failed to simplify message:', error);
-      // Restore the array if API fails
       set((state) => ({
         activeChat: state.activeChat
-          ? {
-            ...state.activeChat,
-            messages: activeChat.messages, // Bring back the untouched slice
-          }
+          ? { ...state.activeChat, messages: normalizedMessages }
+          : state.activeChat,
+      }));
+    } catch (error) {
+      console.error('Failed to simplify message:', error);
+      // Restore original messages on failure
+      set((state) => ({
+        activeChat: state.activeChat
+          ? { ...state.activeChat, messages: activeChat.messages }
           : state.activeChat,
       }));
     } finally {

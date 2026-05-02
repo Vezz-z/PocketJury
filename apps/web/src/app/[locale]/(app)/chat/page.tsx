@@ -11,6 +11,31 @@ import { MessageSquarePlus, Clock, ChevronRight, Trash2 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 
+/** Strip markdown formatting characters for plain-text display */
+function stripMarkdown(text: string): string {
+  return text
+    .replace(/\[SIMPLIFIED_MARKER\]\n\n?/g, 'Simplified: ')
+    .replace(/\[SIMPLIFIED_MARKER\]/g, 'Simplified: ')
+    .replace(/#{1,6}\s/g, '')
+    .replace(/\*\*(.+?)\*\*/g, '$1')
+    .replace(/\*(.+?)\*/g, '$1')
+    .replace(/__(.+?)__/g, '$1')
+    .replace(/_(.+?)_/g, '$1')
+    .replace(/~~(.+?)~~/g, '$1')
+    .replace(/`(.+?)`/g, '$1')
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+    .replace(/!\[([^\]]*)\]\([^)]+\)/g, '$1')
+    .replace(/^\s*[-*+]\s/gm, '')
+    .replace(/^\s*\d+\.\s/gm, '')
+    .replace(/^\s*>\s/gm, '')
+    .replace(/---+/g, '')
+    .replace(/<br\s*\/?>/gi, ' ')
+    .replace(/<[^>]+>/g, '')
+    .replace(/\n{2,}/g, ' ')
+    .replace(/\n/g, ' ')
+    .trim();
+}
+
 export default function ChatPage() {
   const t = useTranslations('chat');
   const tCommon = useTranslations('common');
@@ -83,10 +108,12 @@ export default function ChatPage() {
                     <Clock className="h-3 w-3" />
                     {new Date(chat.updatedAt).toLocaleDateString()}
                   </span>
-                  <span>
-                    {chat.messagesCount} {t('messages')}
-                  </span>
                 </div>
+                {chat.lastMessage && (
+                  <p className="mt-1.5 text-xs text-muted truncate max-w-full">
+                    {stripMarkdown(chat.lastMessage)}
+                  </p>
+                )}
               </div>
               <div className="flex items-center gap-2">
                 <button

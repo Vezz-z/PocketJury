@@ -39,6 +39,7 @@ export class ChatService {
         languageCode: true,
         createdAt: true,
         updatedAt: true,
+        _count: { select: { messages: true } },
         messages: {
           take: 1,
           orderBy: { createdAt: "desc" },
@@ -56,7 +57,8 @@ export class ChatService {
         title: c.title,
         personaMode: c.personaMode,
         languageCode: c.languageCode,
-        lastMessage: c.messages[0]?.content?.slice(0, 100) || null,
+        messagesCount: c._count?.messages || 0,
+        lastMessage: c.messages[0]?.content?.slice(0, 200) || null,
         createdAt: c.createdAt,
         updatedAt: c.updatedAt,
       })),
@@ -308,6 +310,21 @@ export class ChatService {
     const firstMessageContent = sanitizedContent;
     const collectedChunks: string[] = [];
 
+    // Fire-and-forget: generate a descriptive title via LLM IMMEDIATELY
+    // (don't wait for stream to finish — the user sees the title update sooner)
+    if (isFirstMessage) {
+      aiService.generateTitle(firstMessageContent).then(async (title) => {
+        try {
+          await prisma.chat.update({
+            where: { id: chatId },
+            data: { title },
+          });
+        } catch (titleErr) {
+          logger.warn({ err: titleErr, chatId }, "Failed to save generated title");
+        }
+      }).catch(() => {});
+    }
+
     // Pump the web ReadableStream into the PassThrough in the background
     const reader = aiResponse.body.getReader();
     const decoder = new TextDecoder();
@@ -353,14 +370,6 @@ export class ChatService {
               },
             },
           });
-
-          if (isFirstMessage) {
-            const title = firstMessageContent.slice(0, 80) + (firstMessageContent.length > 80 ? "..." : "");
-            await prisma.chat.update({
-              where: { id: chatId },
-              data: { title },
-            });
-          }
 
           await prisma.chat.update({
             where: { id: chatId },

@@ -17,7 +17,7 @@ from app.models.schemas import (
     SimplifyResponse,
 )
 from app.core.rag_pipeline import RAGPipeline
-from app.core.prompt_templates import SIMPLIFY_PROMPT
+from app.core.prompt_templates import SIMPLIFY_PROMPT, TITLE_PROMPT
 
 logger = structlog.get_logger()
 router = APIRouter()
@@ -157,3 +157,28 @@ async def simplify_text(request: Request, body: SimplifyRequest) -> SimplifyResp
         )
 
     return SimplifyResponse(simplified_text=simplified, language=body.language)
+
+
+@router.post("/generate-title")
+async def generate_title(request: Request, body: dict) -> dict:
+    """Generate a short, descriptive title for a legal conversation."""
+    query = body.get("query", "").strip()
+    if not query:
+        raise HTTPException(status_code=400, detail="Query is required")
+
+    llm_client = request.app.state.llm_client
+
+    prompt = TITLE_PROMPT.format(query=query[:200])  # Limit query length
+
+    title = await llm_client.generate(
+        prompt=prompt,
+        max_tokens=30,
+        temperature=0.3,
+    )
+
+    # Clean up: remove quotes, trailing punctuation, limit length
+    title = title.strip().strip('"\'').strip()
+    if len(title) > 60:
+        title = title[:57] + "..."
+
+    return {"title": title}

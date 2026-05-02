@@ -210,7 +210,8 @@
     "renameError": "चैट का नाम बदलने में विफल",
     "simplified": "सरलीकृत",
     "rename": "नाम बदलें",
-    "stop": "उत्तर रोकें"
+    "stop": "उत्तर रोकें",
+    "jumpToBottom": "नीचे जाएं"
   },
   "settings": {
     "title": "सेटिंग्स",

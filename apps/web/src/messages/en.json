@@ -210,7 +210,8 @@
     "renameError": "Failed to rename chat",
     "simplified": "Simplified",
     "rename": "Rename",
-    "stop": "Stop generating"
+    "stop": "Stop generating",
+    "jumpToBottom": "Jump to bottom"
   },
   "settings": {
     "title": "Settings",

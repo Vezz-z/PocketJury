@@ -2,7 +2,7 @@
 
 import { motion, AnimatePresence } from 'framer-motion';
 import { AlertTriangle, Trash2, LogOut, X } from 'lucide-react';
-import { useEffect } from 'react';
+import { useEffect, useRef, useCallback } from 'react';
 
 interface ConfirmDialogProps {
   isOpen: boolean;
@@ -29,10 +29,15 @@ export function ConfirmDialog({
   icon = 'alert',
   isLoading = false,
 }: ConfirmDialogProps) {
+  const confirmBtnRef = useRef<HTMLButtonElement>(null);
+  const cancelBtnRef = useRef<HTMLButtonElement>(null);
+
   // Prevent body scroll when open
   useEffect(() => {
     if (isOpen) {
       document.body.style.overflow = 'hidden';
+      // Focus the confirm button when the dialog opens
+      setTimeout(() => confirmBtnRef.current?.focus(), 50);
     } else {
       document.body.style.overflow = 'unset';
     }
@@ -40,6 +45,32 @@ export function ConfirmDialog({
       document.body.style.overflow = 'unset';
     };
   }, [isOpen]);
+
+  // Keyboard handler: Enter = confirm, Esc = close, Tab = cycle focus
+  const handleKeyDown = useCallback((e: KeyboardEvent) => {
+    if (!isOpen || isLoading) return;
+
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      onClose();
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      onConfirm();
+    } else if (e.key === 'Tab') {
+      e.preventDefault();
+      // Toggle focus between confirm and cancel buttons
+      if (document.activeElement === confirmBtnRef.current) {
+        cancelBtnRef.current?.focus();
+      } else {
+        confirmBtnRef.current?.focus();
+      }
+    }
+  }, [isOpen, isLoading, onClose, onConfirm]);
+
+  useEffect(() => {
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [handleKeyDown]);
 
   const IconComponent = icon === 'trash' ? Trash2 : icon === 'logout' ? LogOut : AlertTriangle;
   
@@ -102,16 +133,18 @@ export function ConfirmDialog({
               
               <div className="bg-elevated px-6 py-4 border-t flex items-center justify-end gap-3" style={{ borderColor: 'var(--color-border)' }}>
                 <button
+                  ref={cancelBtnRef}
                   onClick={onClose}
                   disabled={isLoading}
-                  className="btn-ghost"
+                  className="btn-ghost focus:outline-none focus:ring-2 focus:ring-primary-400 focus:ring-offset-1 rounded-lg"
                 >
                   {cancelText}
                 </button>
                 <button
+                  ref={confirmBtnRef}
                   onClick={onConfirm}
                   disabled={isLoading}
-                  className={`${buttonClass} min-w-[100px]`}
+                  className={`${buttonClass} min-w-[100px] focus:outline-none focus:ring-2 focus:ring-primary-400 focus:ring-offset-1 rounded-lg`}
                 >
                   {isLoading ? (
                     <div className="h-4 w-4 rounded-full border-2 border-white border-t-transparent animate-spin" />

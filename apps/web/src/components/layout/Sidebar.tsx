@@ -99,6 +99,7 @@ function ChatItem({
         : 'text-body hover:bg-elevated'
         }`}
       onClick={onSelect}
+      title={chat.title || t('untitledChat')}
     >
       <MessageSquare className="h-3.5 w-3.5 flex-shrink-0" />
       <span className="truncate flex-1 min-w-0">{chat.title || t('untitledChat')}</span>
@@ -267,12 +268,21 @@ export function Sidebar({ open, desktopOpen, onClose }: SidebarProps) {
 
   return (
     <>
-      {/* Desktop sidebar — collapsible with strictly fixed width */}
-      {desktopOpen && (
-        <div className="hidden md:flex md:flex-shrink-0 relative" style={{ minWidth: '11.4rem', maxWidth: '11.4rem', width: '11.4rem' }}>
+      {/* Desktop sidebar — collapsible with smooth animation */}
+      <motion.div
+        className="hidden md:flex md:flex-shrink-0 relative overflow-hidden"
+        initial={false}
+        animate={{
+          width: desktopOpen ? '11.4rem' : '0rem',
+          opacity: desktopOpen ? 1 : 0,
+        }}
+        transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
+        style={{ minWidth: 0 }}
+      >
+        <div style={{ minWidth: '11.4rem', maxWidth: '11.4rem', width: '11.4rem' }}>
           {sidebarContent}
         </div>
-      )}
+      </motion.div>
 
       {/* Desktop collapse button when closed */}
       {!desktopOpen && (

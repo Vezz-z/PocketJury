@@ -110,7 +110,13 @@ export function MessageBubble({ message, isActivelyStreaming, onSimplify, onFeed
                   td: ({ node, ...props }) => <td className="px-4 py-2 border-b border-border/50 text-body" {...props} />,
                 }}
               >
-                {message.content.replace('[SIMPLIFIED_MARKER]\n\n', '').replace('[SIMPLIFIED_MARKER]', '').replace('**✨ Simplified**\n\n', '').replace('**✨ Simplified**', '')}
+                {message.content
+                  .replace('[SIMPLIFIED_MARKER]\n\n', '').replace('[SIMPLIFIED_MARKER]', '')
+                  .replace('**✨ Simplified**\n\n', '').replace('**✨ Simplified**', '')
+                  /* Sanitize raw HTML tags the LLM may inject */
+                  .replace(/<br\s*\/?>/gi, '\n')
+                  .replace(/<\/?(div|span|p|b|i|u|em|strong|a|img|script|style|iframe|input|form|button|select|textarea|link|meta|object|embed)[^>]*>/gi, '')
+                }
               </ReactMarkdown>
             </div>
           )}
