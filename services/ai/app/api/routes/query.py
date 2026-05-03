@@ -166,9 +166,19 @@ async def generate_title(request: Request, body: dict) -> dict:
     if not query:
         raise HTTPException(status_code=400, detail="Query is required")
 
+    language_code = body.get("language_code", "en")
+    language_map = {"en": "English", "hi": "Hindi", "ta": "Tamil", "bn": "Bengali"}
+    language_name = language_map.get(language_code, "English")
+
+    # Build language instruction
+    if language_code != "en":
+        language_instruction = f"- Generate the title in {language_name} (not English)"
+    else:
+        language_instruction = ""
+
     llm_client = request.app.state.llm_client
 
-    prompt = TITLE_PROMPT.format(query=query[:200])  # Limit query length
+    prompt = TITLE_PROMPT.format(query=query[:200], language_instruction=language_instruction)
 
     title = await llm_client.generate(
         prompt=prompt,

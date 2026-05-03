@@ -1,4 +1,4 @@
-# ⚖️ PocketJury (v1.0.0)
+# ⚖️ PocketJury (v1.0.1)
 
 **An AI-Powered Legal Informational Tool for the Indian Judiciary Context**
 
@@ -9,9 +9,11 @@ Welcome to **PocketJury**! This application is designed to bridge the massive ga
 ## 🌟 Key Features & Capabilities
 
 - **Zero-Hallucination Legal Framing**: PocketJury completely rejects the baseline knowledge of the AI model. Instead, it utilizes strictly isolated vector embeddings to dynamically inject actual, verified laws straight into the LLM's context window.
+- **Advanced Streaming & Concurrency**: Leverages Server-Sent Events (SSE) for real-time, typewriter-style responses. Fully supports background stream processing—switch chats seamlessly while the AI continues generating in the background with persistent UI indicators and toast notifications.
 - **Multi-Lingual Support**: The UI and AI response logic are fully localized to support **English (`en`), Hindi (`hi`), Tamil (`ta`), and Bengali (`bn`)** with real-time UI switching via `next-intl`.
 - **IPC to BNS Automatic Transitioning**: Historical Indian Penal Code (IPC) queries are natively forced by the application to map perfectly to the new Bharatiya Nyaya Sanhita (BNS) 2023 equivalents.
-- **Semantic UI Chat Navigation**: Features instant-state message deletion, conversational tracking, "Simplify" toggles to reduce legal jargon, and beautifully formatted SVG citations for readability.
+- **Semantic UI Chat Navigation**: Features instant-state message deletion, conversational tracking, "Simplify" toggles to reduce legal jargon, "Stop Generating" kill switches, and dynamic scroll handlers.
+- **Keyboard Power User Shortcuts**: Includes `Ctrl+Shift+K` (New Chat), `Ctrl+Alt+C` (Chats), `Ctrl+Alt+K` (Toggle Sidebar), and `Ctrl+Shift+S` (Settings) for rapid navigation.
 - **Built-in Safety Guardrails**: Sensitive queries (e.g., Domestic Violence or Child Exploitation) bypass normal pipelines to automatically surface National Emergency Helplines (like 181, 1098, and 1930).
 
 ---

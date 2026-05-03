@@ -4,6 +4,7 @@ import { NextIntlClientProvider } from 'next-intl';
 import { getMessages } from 'next-intl/server';
 import { ThemeProvider } from 'next-themes';
 import { Toaster } from 'sonner';
+import { BackgroundStreamToast } from '@/components/chat/BackgroundStreamToast';
 import '../globals.css';
 
 const notoSans = Noto_Sans({
@@ -72,6 +73,7 @@ export default async function RootLayout({
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
           <NextIntlClientProvider messages={messages}>
             {children}
+            <BackgroundStreamToast />
             <Toaster
               position="top-center"
               richColors

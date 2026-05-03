@@ -4,7 +4,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { useChatStore } from '@/store';
 import { MessageSquarePlus, Clock, ChevronRight, Trash2 } from 'lucide-react';
@@ -40,17 +40,18 @@ export default function ChatPage() {
   const t = useTranslations('chat');
   const tCommon = useTranslations('common');
   const router = useRouter();
-  const { chats, isLoadingChats, fetchChats, createChat, deleteChat } = useChatStore();
+  const { chats, isLoadingChats, fetchChats, deleteChat } = useChatStore();
 
   const [chatToDelete, setChatToDelete] = useState<string | null>(null);
+  const pathname = usePathname();
 
   useEffect(() => {
     fetchChats();
   }, [fetchChats]);
 
-  const handleNewChat = async () => {
-    const chatId = await createChat();
-    router.push(`/chat/${chatId}`);
+  const handleNewChat = () => {
+    const locale = pathname.split('/')[1] || 'en';
+    router.push(`/${locale}/chat/new`);
   };
 
   return (
@@ -60,7 +61,7 @@ export default function ChatPage() {
           <h1 className="text-2xl font-bold text-heading">{t('title')}</h1>
           <p className="mt-1 text-sm text-muted">{t('subtitle')}</p>
         </div>
-        <button className="btn-primary" onClick={handleNewChat}>
+        <button className="btn-primary" onClick={handleNewChat} title={`${t('newChat')} (Ctrl+Shift+K)`}>
           <MessageSquarePlus className="h-4 w-4 mr-2" />
           {t('newChat')}
         </button>
@@ -84,7 +85,7 @@ export default function ChatPage() {
           <MessageSquarePlus className="mx-auto h-12 w-12 text-muted" />
           <h2 className="mt-4 text-lg font-medium text-heading">{t('noChats')}</h2>
           <p className="mt-2 text-sm text-muted">{t('startFirst')}</p>
-          <button className="btn-primary mt-6" onClick={handleNewChat}>
+          <button className="btn-primary mt-6" onClick={handleNewChat} title={`${t('newChat')} (Ctrl+Shift+K)`}>
             {t('newChat')}
           </button>
         </motion.div>

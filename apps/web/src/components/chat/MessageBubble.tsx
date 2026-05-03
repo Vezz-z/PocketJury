@@ -64,6 +64,7 @@ interface MessageBubbleProps {
 export function MessageBubble({ message, isActivelyStreaming, onSimplify, onFeedback }: MessageBubbleProps) {
   const t = useTranslations('chat');
   const isUser = message.role === 'user';
+  const isError = !isUser && message.content.startsWith('⚠️');
   const [showRefs, setShowRefs] = useState(false);
   const [copied, setCopied] = useState(false);
 
@@ -193,8 +194,8 @@ export function MessageBubble({ message, isActivelyStreaming, onSimplify, onFeed
           </div>
         )}
 
-        {/* Actions toolbar for assistant messages — hidden during streaming */}
-        {!isUser && !isActivelyStreaming && message.content && (
+        {/* Actions toolbar for assistant messages — hidden during streaming and for error messages */}
+        {!isUser && !isActivelyStreaming && !isError && message.content && (
           <div className="mt-2 flex items-center gap-1">
             {/* Copy */}
             <button

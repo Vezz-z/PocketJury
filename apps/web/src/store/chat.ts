@@ -4,7 +4,6 @@
 
 import { create } from 'zustand';
 import { chatApi, feedbackApi } from '@/lib/api';
-import { toast } from 'sonner';
 
 interface Message {
   id: string;
@@ -39,6 +38,7 @@ interface Chat {
   lastMessage?: string;
   updatedAt: string;
   messages?: Message[];
+  hasUnread?: boolean;
 }
 
 interface ChatState {
@@ -49,6 +49,7 @@ interface ChatState {
   isSending: boolean;
   isStreaming: boolean;
   streamingMessageId: string | null;
+  streamingChatIds: string[]; // Which chats are streaming (for sidebar indicators)
   isSimplifyingMessageId: string | null;
   error: string | null;
 
@@ -66,7 +67,18 @@ interface ChatState {
 
 // Module-level refs for stream management
 let _activeReader: ReadableStreamDefaultReader<Uint8Array> | null = null;
-let _activeStreamChatId: string | null = null; // Which chat is currently streaming
+let _activeStreamChatId: string | null = null;
+
+// Background streams: tracks streaming state for chats the user navigated away from
+interface BackgroundStream {
+  messages: Message[];
+  streamingMessageId: string;
+}
+const _backgroundStreams = new Map<string, BackgroundStream>();
+// Accumulated content per streaming message (shared between foreground + background)
+const _streamContent = new Map<string, string>(); // streamingMessageId -> accumulated text
+// Cache processingTimeMs for streams that complete while user is on a different chat
+const _completedStreamMeta = new Map<string, { streamMsgId: string; processingTimeMs?: number }>(); // chatId -> meta
 
 export const useChatStore = create<ChatState>()((set, get) => ({
   chats: [],
@@ -76,6 +88,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
   isSending: false,
   isStreaming: false,
   streamingMessageId: null,
+  streamingChatIds: [],
   isSimplifyingMessageId: null,
   error: null,
 
@@ -111,14 +124,65 @@ export const useChatStore = create<ChatState>()((set, get) => ({
   },
 
   selectChat: async (chatId) => {
-    // If switching away from a streaming chat, DON'T cancel the reader.
-    // The background stream continues; the reader is only cancelled via stopStreaming.
     const prev = get();
-    if (prev.isStreaming && prev.activeChat?.id && prev.activeChat.id !== chatId) {
-      // Reset UI state only — the stream reader continues in the background
+    const prevChatId = prev.activeChat?.id;
+
+    // If switching away from a streaming chat, save its state for later restoration
+    if (prev.isStreaming && prevChatId && prevChatId !== chatId && prev.streamingMessageId) {
+      _backgroundStreams.set(prevChatId, {
+        messages: prev.activeChat?.messages || [],
+        streamingMessageId: prev.streamingMessageId,
+      });
+      // Reset UI streaming flags — streamingChatIds keeps the pulsating icon
       set({ isSending: false, isStreaming: false, streamingMessageId: null });
     }
 
+    // Clear hasUnread for this chat
+    set((state) => ({
+      chats: state.chats.map((c) => c.id === chatId ? { ...c, hasUnread: false } : c),
+    }));
+
+    // If the stream reader is currently pumping for this chat (e.g. navigating from /chat/new),
+    // DON'T fetch from server — sendMessage already has activeChat set up correctly.
+    if (_activeStreamChatId === chatId && !_backgroundStreams.has(chatId)) {
+      // Restore full streaming state so the UI resumes properly
+      const currentStreamMsgId = Array.from(_streamContent.keys()).find((k) => k.startsWith('streaming-'));
+      set({
+        isLoadingMessages: false,
+        isSending: true,
+        isStreaming: true,
+        streamingMessageId: currentStreamMsgId || get().streamingMessageId,
+      });
+      return;
+    }
+
+    // Check if we have a background stream for this chat — restore instead of fetching
+    const bg = _backgroundStreams.get(chatId);
+    if (bg) {
+      const latestContent = _streamContent.get(bg.streamingMessageId) || '';
+      const restoredMessages = bg.messages.map((m) =>
+        m.id === bg.streamingMessageId ? { ...m, content: latestContent } : m,
+      );
+      _backgroundStreams.delete(chatId);
+
+      const chat: Chat = {
+        id: chatId,
+        title: prev.chats.find((c) => c.id === chatId)?.title || 'New Chat',
+        messagesCount: restoredMessages.length,
+        updatedAt: new Date().toISOString(),
+        messages: restoredMessages,
+      };
+      set({
+        activeChat: chat,
+        isLoadingMessages: false,
+        isSending: true,
+        isStreaming: true,
+        streamingMessageId: bg.streamingMessageId,
+      });
+      return;
+    }
+
+    // Normal fetch from server
     set({ isLoadingMessages: true });
     try {
       const data = await chatApi.get(chatId);
@@ -133,7 +197,22 @@ export const useChatStore = create<ChatState>()((set, get) => ({
         updatedAt: data.updatedAt,
         messages: normalizedMessages,
       };
-      set({ activeChat: chat, isLoadingMessages: false });
+
+      // Merge cached processingTimeMs from background-completed streams
+      const meta = _completedStreamMeta.get(chatId);
+      if (meta && chat.messages) {
+        const msgs = chat.messages;
+        chat.messages = msgs.map((m) => {
+          if (meta.streamMsgId && m.role === 'assistant' && m === msgs[msgs.length - 1]) {
+            return { ...m, processingTimeMs: meta.processingTimeMs };
+          }
+          return m;
+        });
+        _completedStreamMeta.delete(chatId);
+      }
+
+      // Always reset streaming flags — this chat is fully loaded from server
+      set({ activeChat: chat, isLoadingMessages: false, isSending: false, isStreaming: false, streamingMessageId: null });
     } catch {
       set({ error: 'Failed to load chat', isLoadingMessages: false });
     }
@@ -194,16 +273,22 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     const currentTitle = get().activeChat?.title;
     const isGenericTitle = !currentTitle || currentTitle === 'New Chat' || currentTitle === 'Untitled Chat';
 
-    set((state) => ({
-      isSending: true,
-      isStreaming: false,
-      activeChat: state.activeChat
-        ? {
-          ...state.activeChat,
-          messages: [...(state.activeChat.messages || []), userMessage],
-        }
-        : state.activeChat,
-    }));
+    // Mark this chat as having an active stream BEFORE the API call,
+    // so selectChat can detect it if the user navigates while we await.
+    _activeStreamChatId = chatId;
+
+    // Add user message to activeChat — create activeChat if it doesn't exist
+    set((state) => {
+      const existing = state.activeChat?.id === chatId ? state.activeChat : null;
+      const chat: Chat = existing
+        ? { ...existing, messages: [...(existing.messages || []), userMessage] }
+        : { id: chatId, title: 'New Chat', messagesCount: 1, updatedAt: new Date().toISOString(), messages: [userMessage] };
+      return {
+        isSending: true,
+        isStreaming: false,
+        activeChat: chat,
+      };
+    });
 
     // Start title polling immediately for first messages
     // (backend now fires generateTitle before the stream, so it arrives faster)
@@ -239,20 +324,25 @@ export const useChatStore = create<ChatState>()((set, get) => ({
         throw new Error('No response body for streaming');
       }
 
-      // Track which chat this stream belongs to
-      _activeStreamChatId = chatId;
+      _streamContent.set(streamingAssistantId, '');
 
-      // Add the empty assistant message placeholder (only if still on same chat)
-      set((state) => ({
-        isStreaming: state.activeChat?.id === chatId ? true : state.isStreaming,
-        streamingMessageId: state.activeChat?.id === chatId ? streamingAssistantId : state.streamingMessageId,
-        activeChat: state.activeChat?.id === chatId
-          ? {
-            ...state.activeChat,
-            messages: [...(state.activeChat.messages || []), streamingAssistant],
-          }
-          : state.activeChat,
-      }));
+      // Add the empty assistant message placeholder — always update activeChat
+      set((state) => {
+        const isOnThisChat = state.activeChat?.id === chatId;
+        return {
+          isStreaming: isOnThisChat ? true : state.isStreaming,
+          streamingMessageId: isOnThisChat ? streamingAssistantId : state.streamingMessageId,
+          streamingChatIds: state.streamingChatIds.includes(chatId)
+            ? state.streamingChatIds
+            : [...state.streamingChatIds, chatId],
+          activeChat: isOnThisChat
+            ? {
+              ...state.activeChat!,
+              messages: [...(state.activeChat!.messages || []), streamingAssistant],
+            }
+            : state.activeChat,
+        };
+      });
 
       // Parse SSE stream
       const reader = response.body.getReader();
@@ -316,7 +406,9 @@ export const useChatStore = create<ChatState>()((set, get) => ({
 
               case 'token':
                 accumulatedContent += (parsed.text as string) || '';
-                // Only update UI if user is still viewing this chat
+                // Always track in _streamContent for background restore
+                _streamContent.set(streamingAssistantId, accumulatedContent);
+                // Update UI if user is viewing this chat
                 if (get().activeChat?.id === chatId) {
                   set((state) => ({
                     activeChat: state.activeChat?.id === chatId
@@ -330,11 +422,20 @@ export const useChatStore = create<ChatState>()((set, get) => ({
                       }
                       : state.activeChat,
                   }));
+                } else {
+                  // Update background stream messages snapshot
+                  const bgEntry = _backgroundStreams.get(chatId);
+                  if (bgEntry) {
+                    bgEntry.messages = bgEntry.messages.map((m) =>
+                      m.id === streamingAssistantId ? { ...m, content: accumulatedContent } : m,
+                    );
+                  }
                 }
                 break;
 
               case 'done': {
                 const finalContent = accumulatedContent || (parsed.answer_translated as string) || (parsed.answer as string) || '';
+                const ptMs = parsed.processing_time_ms as number | undefined;
                 const isStillOnChat = get().activeChat?.id === chatId;
                 if (isStillOnChat) {
                   set((state) => ({
@@ -346,12 +447,24 @@ export const useChatStore = create<ChatState>()((set, get) => ({
                         ...state.activeChat,
                         messages: (state.activeChat.messages || []).map((m) =>
                           m.id === streamingAssistantId
-                            ? { ...m, content: finalContent, processingTimeMs: parsed.processing_time_ms as number | undefined }
+                            ? { ...m, content: finalContent, processingTimeMs: ptMs }
                             : m,
                         ),
                       }
                       : state.activeChat,
                   }));
+                } else {
+                  // Stream finished in background — update _backgroundStreams if present
+                  const bgEntry = _backgroundStreams.get(chatId);
+                  if (bgEntry) {
+                    bgEntry.messages = bgEntry.messages.map((m) =>
+                      m.id === streamingAssistantId
+                        ? { ...m, content: finalContent, processingTimeMs: ptMs }
+                        : m,
+                    );
+                  }
+                  // Cache meta for later retrieval when user switches back
+                  _completedStreamMeta.set(chatId, { streamMsgId: streamingAssistantId, processingTimeMs: ptMs });
                 }
                 break;
               }
@@ -415,32 +528,53 @@ export const useChatStore = create<ChatState>()((set, get) => ({
 
       // If cancelled by user, keep accumulated content as the final message
       if (wasCancelled) {
-        if (get().activeChat?.id === chatId) {
-          set({ isSending: false, isStreaming: false, streamingMessageId: null });
-        }
+        _streamContent.delete(streamingAssistantId);
+        _backgroundStreams.delete(chatId);
+        _activeStreamChatId = null;
+        // Always clear streaming state — even if user navigated away
+        set((state) => ({
+          isSending: state.activeChat?.id === chatId ? false : state.isSending,
+          isStreaming: state.activeChat?.id === chatId ? false : state.isStreaming,
+          streamingMessageId: state.activeChat?.id === chatId ? null : state.streamingMessageId,
+          streamingChatIds: state.streamingChatIds.filter((id) => id !== chatId),
+        }));
         return;
       }
 
-      // Clean up streaming state only if we're still on the same chat
+      // Clean up tracking
+      _streamContent.delete(streamingAssistantId);
+      _backgroundStreams.delete(chatId);
+      _activeStreamChatId = null;
+
       const isStillOnThisChat = get().activeChat?.id === chatId;
       if (isStillOnThisChat) {
-        set({ isSending: false, isStreaming: false, streamingMessageId: null });
+        set((state) => ({ isSending: false, isStreaming: false, streamingMessageId: null, streamingChatIds: state.streamingChatIds.filter((id) => id !== chatId) }));
       } else {
-        // Stream finished in the background — notify the user
-        _activeStreamChatId = null;
-        const chatTitle = get().chats.find((c) => c.id === chatId)?.title || 'a chat';
-        const locale = typeof window !== 'undefined' ? (window.location.pathname.split('/')[1] || 'en') : 'en';
-        toast.info(`Response ready in "${chatTitle}"`, {
-          duration: 10000,
-          action: {
-            label: 'View',
-            onClick: () => { window.location.href = `/${locale}/chat/${chatId}`; },
-          },
-        });
+        // Stream finished in the background — mark unread + dispatch event for toast
+        set((state) => ({
+          streamingChatIds: state.streamingChatIds.filter((id) => id !== chatId),
+          chats: state.chats.map((c) => c.id === chatId ? { ...c, hasUnread: true } : c),
+        }));
+        // Dispatch a custom event so a React component can show a localized toast
+        if (typeof window !== 'undefined') {
+          const chatTitle = get().chats.find((c) => c.id === chatId)?.title || 'Chat';
+          window.dispatchEvent(new CustomEvent('pocketjury:bg-stream-done', {
+            detail: { chatId, chatTitle },
+          }));
+        }
       }
 
     } catch (err: any) {
-      // Only update UI if we're still on the same chat
+      _activeStreamChatId = null;
+      _streamContent.delete(streamingAssistantId);
+      _backgroundStreams.delete(chatId);
+
+      // Always clear streaming indicator for this chat
+      set((state) => ({
+        streamingChatIds: state.streamingChatIds.filter((id) => id !== chatId),
+      }));
+
+      // Only update UI error state if we're still on the same chat
       if (get().activeChat?.id !== chatId) return;
 
       let errorMessage = 'Assistant unavailable at the moment.';
@@ -473,6 +607,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
         return {
           isSending: false,
           isStreaming: false,
+          streamingChatIds: state.streamingChatIds.filter((id) => id !== chatId),
           activeChat: state.activeChat?.id === chatId
             ? {
               ...state.activeChat,
@@ -492,7 +627,15 @@ export const useChatStore = create<ChatState>()((set, get) => ({
       _activeReader = null;
       _activeStreamChatId = null;
     }
-    set({ isSending: false, isStreaming: false, streamingMessageId: null });
+    const currentChatId = get().activeChat?.id;
+    set((state) => ({
+      isSending: false,
+      isStreaming: false,
+      streamingMessageId: null,
+      streamingChatIds: currentChatId
+        ? state.streamingChatIds.filter((id) => id !== currentChatId)
+        : state.streamingChatIds,
+    }));
   },
 
   simplifyMessage: async (chatId, messageId) => {

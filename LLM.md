@@ -397,7 +397,7 @@ RAG_TOP_K_FINAL: int = 5  # Fewer context chunks to fit in smaller context windo
 | **Context window** | 4K-8K tokens vs 128K for OpenRouter GPT-OSS-120B | Reduce RAG_TOP_K_FINAL, summarize context |
 | **Multilingual** | Hindi/Tamil/Bengali support varies by model | Test with target languages, consider fine-tuning |
 | **Hallucination** | More prone to fabricating legal citations | RAG grounding helps, but validate outputs |
-| **No streaming** | Ollama supports streaming but our pipeline doesn't yet | Future enhancement |
+| **No streaming** | Ollama via LangChain supports streaming, and PocketJury v1.0.1+ UI fully supports Server-Sent Events (SSE). To enable local streaming, update the `AsyncOpenAI` client in `llm_client.py` to `stream=True` and yield chunks. | See `routes/query.py` for streaming implementation |
 
 ---
 

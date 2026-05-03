@@ -133,7 +133,7 @@ Rules:
 - Capture the main legal topic
 - Do not include punctuation except hyphens
 - Examples: "Property Dispute with Neighbour", "FIR Filing Process for Theft", "Divorce Rights Under Hindu Law"
-
+{language_instruction}
 Title:"""
 
 

@@ -56,7 +56,8 @@
     "rename": "नाम बदलें",
     "delete": "हटाएं",
     "deleteConfirm": "क्या आप इस चैट को हटाना चाहते हैं?",
-    "logoutConfirm": "क्या आप लॉग आउट करना चाहते हैं?"
+    "logoutConfirm": "क्या आप लॉग आउट करना चाहते हैं?",
+    "toggleSidebar": "साइडबार टॉगल करें"
   },
   "auth": {
     "login": "लॉग इन करें",
@@ -210,8 +211,10 @@
     "renameError": "चैट का नाम बदलने में विफल",
     "simplified": "सरलीकृत",
     "rename": "नाम बदलें",
+    "jumpToBottom": "नीचे जाएं",
     "stop": "उत्तर रोकें",
-    "jumpToBottom": "नीचे जाएं"
+    "responseReady": "\"{chatTitle}\" में प्रतिक्रिया तैयार है",
+    "viewChat": "देखें"
   },
   "settings": {
     "title": "सेटिंग्स",
