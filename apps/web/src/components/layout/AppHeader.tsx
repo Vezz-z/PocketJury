@@ -144,6 +144,7 @@ export function AppHeader() {
             href="/settings"
             className="p-1.5 rounded-md text-body hover:bg-elevated transition-colors"
             aria-label={t('settings')}
+            title={`${t('settings')} (Ctrl+Shift+S)`}
           >
             <Settings className="h-4 w-4" />
           </Link>

@@ -33,12 +33,16 @@ interface SidebarProps {
 function ChatItem({
   chat,
   isActive,
+  isStreaming,
+  hasUnread,
   onSelect,
   onDelete,
   onRename,
 }: {
   chat: { id: string; title: string };
   isActive: boolean;
+  isStreaming?: boolean;
+  hasUnread?: boolean;
   onSelect: () => void;
   onDelete: () => void;
   onRename: (title: string) => void;
@@ -101,8 +105,21 @@ function ChatItem({
       onClick={onSelect}
       title={chat.title || t('untitledChat')}
     >
-      <MessageSquare className="h-3.5 w-3.5 flex-shrink-0" />
+      {/* Chat icon — pulsating when streaming, solid otherwise */}
+      {isStreaming ? (
+        <span className="relative flex h-4 w-4 flex-shrink-0 items-center justify-center">
+          <span className="absolute inline-flex h-3.5 w-3.5 rounded-full border-2 border-primary-500 dark:border-blue-400 opacity-75" />
+          <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-primary-600 dark:bg-blue-400 animate-ping" />
+        </span>
+      ) : (
+        <MessageSquare className="h-3.5 w-3.5 flex-shrink-0" style={{ fill: 'currentColor' }} />
+      )}
       <span className="truncate flex-1 min-w-0">{chat.title || t('untitledChat')}</span>
+
+      {/* Blue unread dot */}
+      {hasUnread && (
+        <span className="h-2 w-2 rounded-full bg-primary-600 dark:bg-blue-400 flex-shrink-0" />
+      )}
 
       {/* Three-dot menu */}
       <div className="relative flex-shrink-0" ref={menuRef}>
@@ -154,7 +171,7 @@ export function Sidebar({ open, desktopOpen, onClose }: SidebarProps) {
   const tAuth = useTranslations('auth');
   const router = useRouter();
   const pathname = usePathname();
-  const { chats, fetchChats, createChat, deleteChat, renameChat } = useChatStore();
+  const { chats, fetchChats, deleteChat, renameChat, streamingChatIds } = useChatStore();
 
   const [chatToDelete, setChatToDelete] = useState<string | null>(null);
 
@@ -162,16 +179,41 @@ export function Sidebar({ open, desktopOpen, onClose }: SidebarProps) {
     fetchChats();
   }, [fetchChats]);
 
-  const handleNewChat = async () => {
-    const id = await createChat();
-    router.push(`/chat/${id}`);
+  // Navigate to /chat/new instead of creating a chat
+  const handleNewChat = () => {
+    const locale = pathname.split('/')[1] || 'en';
+    router.push(`/${locale}/chat/new`);
     onClose();
   };
 
+  // Keyboard shortcuts: Ctrl+Shift+K (new chat), Ctrl+Alt+K (toggle sidebar), Ctrl+Shift+S (settings), Ctrl+Alt+C (chats)
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      const key = e.key.toLowerCase();
+      if (e.ctrlKey && e.shiftKey && key === 'k') {
+        e.preventDefault();
+        handleNewChat();
+      } else if (e.ctrlKey && e.altKey && key === 'k') {
+        e.preventDefault();
+        useUIStore.getState().toggleDesktopSidebar();
+      } else if (e.ctrlKey && e.shiftKey && key === 's') {
+        e.preventDefault();
+        const locale = pathname.split('/')[1] || 'en';
+        router.push(`/${locale}/settings`);
+      } else if (e.ctrlKey && e.altKey && key === 'c') {
+        e.preventDefault();
+        const locale = pathname.split('/')[1] || 'en';
+        router.push(`/${locale}/chat`);
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }); // eslint-disable-line react-hooks/exhaustive-deps
+
   const navItems = [
-    { href: '/chat', icon: MessageSquare, label: t('chat') },
-    { href: '/dlsa', icon: Phone, label: t('dlsa') },
-    { href: '/settings', icon: Settings, label: t('settings') },
+    { href: '/chat', icon: MessageSquare, label: t('chat'), shortcut: 'Ctrl+Alt+C' },
+    { href: '/dlsa', icon: Phone, label: t('dlsa'), shortcut: '' },
+    { href: '/settings', icon: Settings, label: t('settings'), shortcut: 'Ctrl+Shift+S' },
   ];
 
   const sidebarContent = (
@@ -183,7 +225,8 @@ export function Sidebar({ open, desktopOpen, onClose }: SidebarProps) {
           <button
             className="p-1 rounded-md text-body hover:bg-elevated hidden md:flex transition-colors mr-1"
             onClick={() => useUIStore.getState().toggleDesktopSidebar()}
-            aria-label="Toggle sidebar"
+            aria-label={t('toggleSidebar')}
+            title={`${t('toggleSidebar')} (Ctrl+Alt+K)`}
           >
             <Menu className="h-5 w-5" />
           </button>
@@ -200,7 +243,7 @@ export function Sidebar({ open, desktopOpen, onClose }: SidebarProps) {
 
       {/* New Chat */}
       <div className="p-3">
-        <button className="btn-primary w-full text-sm" onClick={handleNewChat}>
+        <button className="btn-primary w-full text-sm" onClick={handleNewChat} title={`${t('newChat')} (Ctrl+Shift+K)`}>
           <MessageSquarePlus className="h-4 w-4 mr-2" />
           {t('newChat')}
         </button>
@@ -221,6 +264,7 @@ export function Sidebar({ open, desktopOpen, onClose }: SidebarProps) {
                 router.push(item.href);
                 onClose();
               }}
+              title={item.shortcut ? `${item.label} (${item.shortcut})` : item.label}
             >
               <item.icon className="h-4 w-4" />
               {item.label}
@@ -240,6 +284,8 @@ export function Sidebar({ open, desktopOpen, onClose }: SidebarProps) {
               key={chat.id}
               chat={chat}
               isActive={pathname.includes(chat.id)}
+              isStreaming={streamingChatIds.includes(chat.id)}
+              hasUnread={chat.hasUnread}
               onSelect={() => {
                 router.push(`/chat/${chat.id}`);
                 onClose();

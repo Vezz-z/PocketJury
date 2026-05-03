@@ -43,76 +43,81 @@ export default function ChatConversationPage() {
 
   const messages = activeChat?.messages || [];
 
-  // Helper: is the scroll container near the bottom?
-  const checkIfNearBottom = useCallback(() => {
+  // Refs for scroll management
+  const isStreamingRef = useRef(isStreaming);
+  isStreamingRef.current = isStreaming;
+
+  // Check if scrolled near bottom
+  const isNearBottom = useCallback(() => {
     const el = scrollContainerRef.current;
     if (!el) return true;
     return el.scrollHeight - el.scrollTop - el.clientHeight < 150;
   }, []);
 
-  // Update button visibility based on scroll position
-  const refreshScrollBtn = useCallback(() => {
-    setShowScrollBtn(!checkIfNearBottom());
-  }, [checkIfNearBottom]);
+  // Scroll to bottom smoothly
+  const scrollToBottom = useCallback(() => {
+    userScrolledUpRef.current = false;
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, []);
 
-  // Select chat and reset scroll tracking on chatId change
+  // Select chat on mount/change
   useEffect(() => {
     userScrolledUpRef.current = false;
-    setShowScrollBtn(false);
+    setShowScrollBtn(true);
     if (chatId) selectChat(chatId);
   }, [chatId, selectChat]);
 
-  // Scroll to bottom after messages load (initial chat open)
+  // Scroll to bottom after messages finish loading
   useEffect(() => {
     if (!isLoadingMessages && messages.length > 0) {
       requestAnimationFrame(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'auto' });
-        refreshScrollBtn();
       });
     }
   }, [isLoadingMessages]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Scroll to bottom when new messages are added (unless user scrolled up)
-  const prevMessageCount = useRef(0);
+  // When new messages arrive, auto-scroll unless user scrolled up
+  const prevMsgLen = useRef(0);
   useEffect(() => {
-    if (messages.length > prevMessageCount.current && !userScrolledUpRef.current) {
+    if (messages.length > prevMsgLen.current && !userScrolledUpRef.current) {
       messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }
-    prevMessageCount.current = messages.length;
+    prevMsgLen.current = messages.length;
   }, [messages.length]);
 
   // When user sends a message, always scroll to bottom
-  const prevIsSending = useRef(false);
+  const prevSending = useRef(false);
   useEffect(() => {
-    if (isSending && !prevIsSending.current) {
+    if (isSending && !prevSending.current) {
       userScrolledUpRef.current = false;
       setShowScrollBtn(false);
-      requestAnimationFrame(() => {
-        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-      });
+      requestAnimationFrame(() => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }));
     }
-    prevIsSending.current = isSending;
+    prevSending.current = isSending;
   }, [isSending]);
 
-  // Listen for scroll events
+  // Single persistent scroll listener — no isStreaming dependency
   useEffect(() => {
     const el = scrollContainerRef.current;
     if (!el) return;
-    const onScroll = () => {
-      const nearBottom = checkIfNearBottom();
-      setShowScrollBtn(!nearBottom);
-      if (!nearBottom && isStreaming) userScrolledUpRef.current = true;
-      if (nearBottom) userScrolledUpRef.current = false;
+    const handleScroll = () => {
+      const near = isNearBottom();
+      setShowScrollBtn(true);
+      if (!near && isStreamingRef.current) userScrolledUpRef.current = true;
+      if (near) userScrolledUpRef.current = false;
     };
-    el.addEventListener('scroll', onScroll, { passive: true });
-    return () => el.removeEventListener('scroll', onScroll);
-  }, [checkIfNearBottom, isStreaming]);
+    el.addEventListener('scroll', handleScroll, { passive: true });
+    return () => el.removeEventListener('scroll', handleScroll);
+  }, [isNearBottom]); // only depends on isNearBottom (stable callback)
 
-  const scrollToBottom = useCallback(() => {
-    userScrolledUpRef.current = false;
-    setShowScrollBtn(false);
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, []);
+  // Periodically check if button should show (catches resize, dynamic content)
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (!userScrolledUpRef.current) return; // only if user scrolled up
+      setShowScrollBtn(true);
+    }, 500);
+    return () => clearInterval(interval);
+  }, [isNearBottom]);
 
   // Close menu on outside click
   useEffect(() => {

@@ -56,7 +56,8 @@
     "rename": "পুনঃনামকরণ",
     "delete": "মুছুন",
     "deleteConfirm": "আপনি কি এই চ্যাটটি মুছতে চান?",
-    "logoutConfirm": "আপনি কি লগ আউট করতে চান?"
+    "logoutConfirm": "আপনি কি লগ আউট করতে চান?",
+    "toggleSidebar": "সাইডবার টগল করুন"
   },
   "auth": {
     "login": "লগ ইন করুন",
@@ -210,8 +211,10 @@
     "renameError": "চ্যাটের নাম পরিবর্তন করতে ব্যর্থ",
     "simplified": "সরলীকৃত",
     "rename": "নাম পরিবর্তন করুন",
+    "jumpToBottom": "নিচে যান",
     "stop": "উত্তর বন্ধ করুন",
-    "jumpToBottom": "নিচে যান"
+    "responseReady": "\"{chatTitle}\"-তে প্রতিক্রিয়া প্রস্তুত",
+    "viewChat": "দেখুন"
   },
   "settings": {
     "title": "সেটিংস",

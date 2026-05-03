@@ -187,15 +187,15 @@ export class AIService {
     }
   }
 
-  async generateTitle(query: string): Promise<string> {
+  async generateTitle(query: string, languageCode = 'en'): Promise<string> {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s timeout
+    const timeoutId = setTimeout(() => controller.abort(), 30000); // 30s timeout
 
     try {
       const response = await fetch(`${this.baseUrl}/api/v1/generate-title`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ query }),
+        body: JSON.stringify({ query, language_code: languageCode }),
         signal: controller.signal,
       });
 

@@ -313,7 +313,7 @@ export class ChatService {
     // Fire-and-forget: generate a descriptive title via LLM IMMEDIATELY
     // (don't wait for stream to finish — the user sees the title update sooner)
     if (isFirstMessage) {
-      aiService.generateTitle(firstMessageContent).then(async (title) => {
+      aiService.generateTitle(firstMessageContent, chat.languageCode).then(async (title) => {
         try {
           await prisma.chat.update({
             where: { id: chatId },
