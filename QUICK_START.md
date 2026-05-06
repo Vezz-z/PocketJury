@@ -196,7 +196,13 @@ If you want to gracefully stop the servers without deleting your user accounts o
 docker compose down
 ```
 
-**Erasing the Database:**
+**Erasing User Data (Kill Switch):**
+If you need to instantly remove all user accounts, profiles, chat histories, and logs without affecting the core knowledge base (laws and documents), run this command while the database is running:
+```bash
+docker exec -it pocketjury-postgres psql -U pocketjury -d pocketjury -c "TRUNCATE TABLE users CASCADE;"
+```
+
+**Erasing the Entire Database:**
 If you made a catastrophic error and want to completely nuke the Postgres Database and Redis caches to start perfectly fresh:
 ```bash
 docker compose down --volumes

@@ -28,6 +28,8 @@ RUN npx prisma generate
 COPY apps/api/tsconfig.json apps/api/tsconfig.build.json* ./
 COPY apps/api/src ./src
 RUN npm run build
+# Compile seed script separately (not included in tsconfig rootDir)
+RUN npx tsc prisma/seed.ts --outDir dist --esModuleInterop --skipLibCheck --resolveJsonModule --module CommonJS --target ES2022
 
 # Production
 FROM base AS runner
