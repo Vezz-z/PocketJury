@@ -24,24 +24,59 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Check deployment prerequisites
+        id: preflight
+        env:
+          AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
+          AWS_DEPLOY_ROLE_ARN: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+        run: |
+          missing=()
+          [ -z "$AWS_ACCOUNT_ID" ] && missing+=("AWS_ACCOUNT_ID")
+          [ -z "$AWS_DEPLOY_ROLE_ARN" ] && missing+=("AWS_DEPLOY_ROLE_ARN")
+          [ -z "$DEPLOY_HOST" ] && missing+=("DEPLOY_HOST")
+          [ -z "$DEPLOY_USER" ] && missing+=("DEPLOY_USER")
+          [ -z "$DEPLOY_SSH_KEY" ] && missing+=("DEPLOY_SSH_KEY")
+
+          if [ ${#missing[@]} -gt 0 ]; then
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "missing=$(IFS=,; echo "${missing[*]}")" >> "$GITHUB_OUTPUT"
+            echo "Deployment prerequisites missing: ${missing[*]}"
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Fail when deployment prerequisites are missing
+        if: steps.preflight.outputs.ready == 'false'
+        run: |
+          echo "::error::Missing required secrets for production deployment: ${{ steps.preflight.outputs.missing }}"
+          exit 1
+
       - name: Configure AWS credentials
+        if: steps.preflight.outputs.ready == 'true'
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Login to Amazon ECR
+        if: steps.preflight.outputs.ready == 'true'
         id: ecr-login
         uses: aws-actions/amazon-ecr-login@v2
 
       - name: Set up Docker Buildx
+        if: steps.preflight.outputs.ready == 'true'
         uses: docker/setup-buildx-action@v3
 
       - name: Extract version
+        if: steps.preflight.outputs.ready == 'true'
         id: version
         run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
 
       - name: Build & push API image
+        if: steps.preflight.outputs.ready == 'true'
         uses: docker/build-push-action@v5
         with:
           context: .
@@ -54,6 +89,7 @@ jobs:
           cache-to: type=gha,mode=max
 
       - name: Build & push AI image
+        if: steps.preflight.outputs.ready == 'true'
         uses: docker/build-push-action@v5
         with:
           context: .
@@ -66,6 +102,7 @@ jobs:
           cache-to: type=gha,mode=max
 
       - name: Build & push Web image
+        if: steps.preflight.outputs.ready == 'true'
         uses: docker/build-push-action@v5
         with:
           context: .
@@ -78,6 +115,7 @@ jobs:
           cache-to: type=gha,mode=max
 
       - name: Deploy to EC2
+        if: steps.preflight.outputs.ready == 'true'
         uses: appleboy/ssh-action@v1
         with:
           host: ${{ secrets.DEPLOY_HOST }}
@@ -91,7 +129,7 @@ jobs:
             docker image prune -f
 
       - name: Notify deployment
-        if: always()
+        if: failure() || (success() && steps.preflight.outputs.ready == 'true')
         run: |
           STATUS=${{ job.status }}
-          echo "Deployment $STATUS for version ${{ steps.version.outputs.VERSION }}"
+          echo "Deployment $STATUS for version ${{ github.ref_name }}"
