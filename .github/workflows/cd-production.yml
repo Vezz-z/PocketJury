@@ -24,24 +24,47 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Check deployment prerequisites
+        id: preflight
+        run: |
+          missing=()
+          [ -z "${{ secrets.AWS_ACCOUNT_ID }}" ] && missing+=("AWS_ACCOUNT_ID")
+          [ -z "${{ secrets.AWS_DEPLOY_ROLE_ARN }}" ] && missing+=("AWS_DEPLOY_ROLE_ARN")
+          [ -z "${{ secrets.DEPLOY_HOST }}" ] && missing+=("DEPLOY_HOST")
+          [ -z "${{ secrets.DEPLOY_USER }}" ] && missing+=("DEPLOY_USER")
+          [ -z "${{ secrets.DEPLOY_SSH_KEY }}" ] && missing+=("DEPLOY_SSH_KEY")
+
+          if [ ${#missing[@]} -gt 0 ]; then
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "missing=$(IFS=,; echo "${missing[*]}")" >> "$GITHUB_OUTPUT"
+            echo "::warning::Skipping production deployment. Missing required secrets: ${missing[*]}"
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Configure AWS credentials
+        if: steps.preflight.outputs.ready == 'true'
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Login to Amazon ECR
+        if: steps.preflight.outputs.ready == 'true'
         id: ecr-login
         uses: aws-actions/amazon-ecr-login@v2
 
       - name: Set up Docker Buildx
+        if: steps.preflight.outputs.ready == 'true'
         uses: docker/setup-buildx-action@v3
 
       - name: Extract version
+        if: steps.preflight.outputs.ready == 'true'
         id: version
         run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
 
       - name: Build & push API image
+        if: steps.preflight.outputs.ready == 'true'
         uses: docker/build-push-action@v5
         with:
           context: .
@@ -54,6 +77,7 @@ jobs:
           cache-to: type=gha,mode=max
 
       - name: Build & push AI image
+        if: steps.preflight.outputs.ready == 'true'
         uses: docker/build-push-action@v5
         with:
           context: .
@@ -66,6 +90,7 @@ jobs:
           cache-to: type=gha,mode=max
 
       - name: Build & push Web image
+        if: steps.preflight.outputs.ready == 'true'
         uses: docker/build-push-action@v5
         with:
           context: .
@@ -78,6 +103,7 @@ jobs:
           cache-to: type=gha,mode=max
 
       - name: Deploy to EC2
+        if: steps.preflight.outputs.ready == 'true'
         uses: appleboy/ssh-action@v1
         with:
           host: ${{ secrets.DEPLOY_HOST }}
@@ -89,6 +115,11 @@ jobs:
             docker compose -f docker-compose.yml -f docker-compose.prod.yml pull
             docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --remove-orphans
             docker image prune -f
+
+      - name: Report skipped deployment reason
+        if: steps.preflight.outputs.ready != 'true'
+        run: |
+          echo "Deployment intentionally skipped due to missing required secrets: ${{ steps.preflight.outputs.missing }}"
 
       - name: Notify deployment
         if: always()
