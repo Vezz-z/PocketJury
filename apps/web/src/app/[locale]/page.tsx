@@ -8,6 +8,7 @@ import { useTranslations } from 'next-intl';
 import Link from 'next/link';
 import { useRouter, usePathname } from 'next/navigation';
 import { motion } from 'framer-motion';
+import { toast } from 'sonner';
 import {
   Scale,
   Shield,
@@ -134,13 +135,13 @@ export default function HomePage() {
               )}
             </div>
             <ThemeToggle />
-            <Link href={`/${currentLocale}/login`} className="btn-ghost text-sm">
+            <button onClick={() => toast.info(t('developmentToast'))} className="btn-ghost text-sm">
               {t('nav.login')}
-            </Link>
-            <Link href={`/${currentLocale}/register`} className="btn-primary text-sm">
+            </button>
+            <button onClick={() => toast.info(t('developmentToast'))} className="btn-primary text-sm">
               {t('nav.getStarted')}
               <ChevronRight className="ml-1 h-4 w-4" />
-            </Link>
+            </button>
           </nav>
         </div>
       </header>
@@ -162,13 +163,13 @@ export default function HomePage() {
               {t('app.hero.subtitle')}
             </p>
             <div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-4">
-              <Link href={`/${currentLocale}/register`} className="btn-primary text-base px-8 py-3">
+              <button onClick={() => toast.info(t('developmentToast'))} className="btn-primary text-base px-8 py-3">
                 {t('app.hero.cta')}
                 <ArrowRight className="ml-2 h-5 w-5" />
-              </Link>
-              <Link href={`/${currentLocale}/login`} className="btn-outline text-base px-8 py-3">
+              </button>
+              <button onClick={() => toast.info(t('developmentToast'))} className="btn-outline text-base px-8 py-3">
                 {t('nav.login')}
-              </Link>
+              </button>
             </div>
 
             {/* Disclaimer banner */}
