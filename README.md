@@ -40,4 +40,3 @@ Then open `http://localhost:3000` in your browser.
 ## Deployment
 
 This project is hosted on Vercel, [Click here](https://pocket-jury.vercel.app). 
-For deployment instructions, please refer to `DEPLOY.md`.
