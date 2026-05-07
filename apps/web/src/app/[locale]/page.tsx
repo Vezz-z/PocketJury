@@ -19,6 +19,8 @@ import {
   ChevronRight,
   ArrowRight,
   ChevronDown,
+  Menu,
+  X,
 } from 'lucide-react';
 import { ThemeToggle } from '@/components/ui/ThemeToggle';
 
@@ -43,6 +45,7 @@ export default function HomePage() {
   const router = useRouter();
   const pathname = usePathname();
   const [langOpen, setLangOpen] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const langRef = useRef<HTMLDivElement>(null);
 
   // Detect current locale from pathname
@@ -135,18 +138,42 @@ export default function HomePage() {
               )}
             </div>
             <ThemeToggle />
-            <button onClick={() => toast.info(t('developmentToast'))} className="btn-ghost text-sm">
-              {t('nav.login')}
-            </button>
-            <a href="mailto:mohammedparvezofficial@gmail.com" target="_blank" rel="noopener noreferrer" className="btn-ghost text-sm hidden sm:inline-flex">
-              {t('nav.contactUs')}
-            </a>
-            <button onClick={() => toast.info(t('developmentToast'))} className="btn-primary text-sm">
-              {t('nav.getStarted')}
-              <ChevronRight className="ml-1 h-4 w-4" />
+            <div className="hidden min-[740px]:flex items-center gap-3">
+              <button onClick={() => toast.info(t('developmentToast'))} className="btn-ghost text-sm">
+                {t('nav.login')}
+              </button>
+              <a href="mailto:mohammedparvezofficial@gmail.com" className="btn-ghost text-sm">
+                {t('nav.contactUs')}
+              </a>
+              <button onClick={() => toast.info(t('developmentToast'))} className="btn-primary text-sm">
+                {t('nav.getStarted')}
+                <ChevronRight className="ml-1 h-4 w-4" />
+              </button>
+            </div>
+            
+            <button
+              className="min-[740px]:hidden p-2 rounded-md hover:bg-elevated transition-colors text-body"
+              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+            >
+              {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
             </button>
           </nav>
         </div>
+
+        {mobileMenuOpen && (
+          <div className="min-[740px]:hidden border-t bg-card/95 backdrop-blur-md px-4 py-4 flex flex-col gap-3" style={{ borderColor: 'var(--color-border)' }}>
+            <button onClick={() => toast.info(t('developmentToast'))} className="btn-ghost text-sm w-full justify-start">
+              {t('nav.login')}
+            </button>
+            <a href="mailto:mohammedparvezofficial@gmail.com" className="btn-ghost text-sm w-full justify-start">
+              {t('nav.contactUs')}
+            </a>
+            <button onClick={() => toast.info(t('developmentToast'))} className="btn-primary text-sm w-full justify-center mt-2">
+              {t('nav.getStarted')}
+              <ChevronRight className="ml-1 h-4 w-4" />
+            </button>
+          </div>
+        )}
       </header>
 
       {/* Hero */}
@@ -181,7 +208,7 @@ export default function HomePage() {
                 <Shield className="h-4 w-4 flex-shrink-0" />
                 <span>{t('app.hero.disclaimer')}</span>
               </div>
-              <a href="mailto:mohammedparvezofficial@gmail.com" target="_blank" rel="noopener noreferrer" className="btn-outline text-sm px-6 py-2">
+              <a href="mailto:mohammedparvezofficial@gmail.com" className="btn-outline text-sm px-6 py-2">
                 {t('nav.contactUs')}
               </a>
             </div>
@@ -270,7 +297,7 @@ export default function HomePage() {
             <p className="text-xs text-muted">
               {t('app.footer.disclaimer')}
             </p>
-            <div className="flex flex-wrap justify-center items-center gap-4 text-xs">
+            <div className="flex items-center gap-4 text-xs">
               <Link href={`/${currentLocale}/terms`} target="_blank" rel="noopener noreferrer" className="text-muted hover:text-primary-600 dark:hover:text-blue-400 transition-colors">
                 {t('auth.termsLink')}
               </Link>
@@ -280,7 +307,7 @@ export default function HomePage() {
               <Link href={`/${currentLocale}/legal-sources`} target="_blank" rel="noopener noreferrer" className="text-muted hover:text-primary-600 dark:hover:text-blue-400 transition-colors">
                 {t('auth.legalSourcesLink')}
               </Link>
-              <a href="mailto:mohammedparvezofficial@gmail.com" target="_blank" rel="noopener noreferrer" className="text-muted hover:text-primary-600 dark:hover:text-blue-400 transition-colors text-right">
+              <a href="mailto:mohammedparvezofficial@gmail.com" className="text-muted hover:text-primary-600 dark:hover:text-blue-400 transition-colors text-right">
                 {t('nav.contactUs')}
               </a>
             </div>
