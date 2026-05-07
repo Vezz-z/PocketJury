@@ -16,6 +16,7 @@ build/
 
 # Environment
 .env
+.env.bak
 .env.local
 .env.production
 .env.staging
@@ -61,7 +62,7 @@ yarn-debug.log*
 pnpm-debug.log*
 
 # Misc
-*.pem
+*.pem*
 *.key
 .turbo/
 .vercel/
