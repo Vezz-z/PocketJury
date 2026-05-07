@@ -18,6 +18,8 @@ from sqlalchemy.orm import sessionmaker
 from app.config import get_settings
 from app.core.embedder import EmbedderService
 
+import os
+
 settings = get_settings()
 
 # ── Sample Legal Documents ──────────────────────────────────────────────────
@@ -190,7 +192,7 @@ async def seed():
                             "chunk_index": chunk_idx,
                             "chunk_text": chunk_text_val,
                             "chunk_tokens": len(chunk_text_val.split()),
-                            "model": "intfloat/multilingual-e5-large",
+                            "model": os.getenv("LEGAL_EMBEDDING_MODEL", "intfloat/multilingual-e5-large"),
                             "embedding": embedding_str,
                             "section_ref": section_number,
                         },
@@ -254,7 +256,7 @@ async def seed():
                         "chunk_index": chunk_idx,
                         "chunk_text": chunk_text_val,
                         "chunk_tokens": len(chunk_text_val.split()),
-                        "model": "intfloat/multilingual-e5-large",
+                        "model": os.getenv("LEGAL_EMBEDDING_MODEL", "intfloat/multilingual-e5-large"),
                         "embedding": embedding_str,
                         "section_ref": doc.get("section_number"),
                     },
