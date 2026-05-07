@@ -37,13 +37,13 @@ jobs:
           if [ ${#missing[@]} -gt 0 ]; then
             echo "ready=false" >> "$GITHUB_OUTPUT"
             echo "missing=$(IFS=,; echo "${missing[*]}")" >> "$GITHUB_OUTPUT"
-            echo "::warning::Skipping production deployment. Missing required secrets: ${missing[*]}"
+            echo "Deployment prerequisites missing: ${missing[*]}"
           else
             echo "ready=true" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Fail when deployment prerequisites are missing
-        if: steps.preflight.outputs.ready != 'true'
+        if: steps.preflight.outputs.ready == 'false'
         run: |
           echo "::error::Missing required secrets for production deployment: ${{ steps.preflight.outputs.missing }}"
           exit 1
