@@ -119,7 +119,8 @@ jobs:
       - name: Report skipped deployment reason
         if: steps.preflight.outputs.ready != 'true'
         run: |
-          echo "Deployment intentionally skipped due to missing required secrets: ${{ steps.preflight.outputs.missing }}"
+          echo "::error::Missing required secrets for production deployment: ${{ steps.preflight.outputs.missing }}"
+          exit 1
 
       - name: Notify deployment
         if: always()
