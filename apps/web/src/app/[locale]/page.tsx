@@ -138,6 +138,9 @@ export default function HomePage() {
             <button onClick={() => toast.info(t('developmentToast'))} className="btn-ghost text-sm">
               {t('nav.login')}
             </button>
+            <a href="mailto:mohammedparvezofficial@gmail.com" className="btn-ghost text-sm">
+              {t('nav.contactUs')}
+            </a>
             <button onClick={() => toast.info(t('developmentToast'))} className="btn-primary text-sm">
               {t('nav.getStarted')}
               <ChevronRight className="ml-1 h-4 w-4" />
@@ -173,11 +176,14 @@ export default function HomePage() {
             </div>
 
             {/* Disclaimer banner */}
-            <div className="mt-8 inline-block">
+            <div className="mt-8 flex flex-col items-center gap-4">
               <div className="disclaimer-banner text-sm">
                 <Shield className="h-4 w-4 flex-shrink-0" />
                 <span>{t('app.hero.disclaimer')}</span>
               </div>
+              <a href="mailto:mohammedparvezofficial@gmail.com" className="btn-outline text-sm px-6 py-2">
+                {t('nav.contactUs')}
+              </a>
             </div>
           </motion.div>
         </div>
@@ -274,6 +280,9 @@ export default function HomePage() {
               <Link href={`/${currentLocale}/legal-sources`} target="_blank" rel="noopener noreferrer" className="text-muted hover:text-primary-600 dark:hover:text-blue-400 transition-colors">
                 {t('auth.legalSourcesLink')}
               </Link>
+              <a href="mailto:mohammedparvezofficial@gmail.com" className="text-muted hover:text-primary-600 dark:hover:text-blue-400 transition-colors text-right">
+                {t('nav.contactUs')}
+              </a>
             </div>
             <p className="text-xs text-muted">
               © {new Date().getFullYear()} PocketJury. {t('app.footer.rights')}
