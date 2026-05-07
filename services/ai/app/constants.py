@@ -2,11 +2,13 @@
 # PocketJury AI Service — Constants
 # ==============================================================================
 
+import os
+
 # --- Embedding Models ---
-LEGAL_EMBEDDING_MODEL = "intfloat/multilingual-e5-large"
-QUERY_EMBEDDING_MODEL = "intfloat/multilingual-e5-large"
-EMBEDDING_DIMENSION = 1024
-EMBEDDING_DEVICE = "cpu"  # "cuda" for GPU
+LEGAL_EMBEDDING_MODEL = os.getenv("LEGAL_EMBEDDING_MODEL", "intfloat/multilingual-e5-large")
+QUERY_EMBEDDING_MODEL = os.getenv("QUERY_EMBEDDING_MODEL", "intfloat/multilingual-e5-large")
+EMBEDDING_DIMENSION = int(os.getenv("EMBEDDING_DIMENSION", "1024"))
+EMBEDDING_DEVICE = os.getenv("EMBEDDING_DEVICE", "cpu")
 
 # --- RAG Pipeline ---
 RAG_TOP_K_VECTOR = 15
