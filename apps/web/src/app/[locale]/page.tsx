@@ -138,7 +138,7 @@ export default function HomePage() {
             <button onClick={() => toast.info(t('developmentToast'))} className="btn-ghost text-sm">
               {t('nav.login')}
             </button>
-            <a href="mailto:mohammedparvezofficial@gmail.com" className="btn-ghost text-sm">
+            <a href="mailto:mohammedparvezofficial@gmail.com" target="_blank" rel="noopener noreferrer" className="btn-ghost text-sm hidden sm:inline-flex">
               {t('nav.contactUs')}
             </a>
             <button onClick={() => toast.info(t('developmentToast'))} className="btn-primary text-sm">
@@ -181,7 +181,7 @@ export default function HomePage() {
                 <Shield className="h-4 w-4 flex-shrink-0" />
                 <span>{t('app.hero.disclaimer')}</span>
               </div>
-              <a href="mailto:mohammedparvezofficial@gmail.com" className="btn-outline text-sm px-6 py-2">
+              <a href="mailto:mohammedparvezofficial@gmail.com" target="_blank" rel="noopener noreferrer" className="btn-outline text-sm px-6 py-2">
                 {t('nav.contactUs')}
               </a>
             </div>
@@ -270,7 +270,7 @@ export default function HomePage() {
             <p className="text-xs text-muted">
               {t('app.footer.disclaimer')}
             </p>
-            <div className="flex items-center gap-4 text-xs">
+            <div className="flex flex-wrap justify-center items-center gap-4 text-xs">
               <Link href={`/${currentLocale}/terms`} target="_blank" rel="noopener noreferrer" className="text-muted hover:text-primary-600 dark:hover:text-blue-400 transition-colors">
                 {t('auth.termsLink')}
               </Link>
@@ -280,7 +280,7 @@ export default function HomePage() {
               <Link href={`/${currentLocale}/legal-sources`} target="_blank" rel="noopener noreferrer" className="text-muted hover:text-primary-600 dark:hover:text-blue-400 transition-colors">
                 {t('auth.legalSourcesLink')}
               </Link>
-              <a href="mailto:mohammedparvezofficial@gmail.com" className="text-muted hover:text-primary-600 dark:hover:text-blue-400 transition-colors text-right">
+              <a href="mailto:mohammedparvezofficial@gmail.com" target="_blank" rel="noopener noreferrer" className="text-muted hover:text-primary-600 dark:hover:text-blue-400 transition-colors text-right">
                 {t('nav.contactUs')}
               </a>
             </div>
