@@ -26,13 +26,19 @@ jobs:
 
       - name: Check deployment prerequisites
         id: preflight
+        env:
+          AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
+          AWS_DEPLOY_ROLE_ARN: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
         run: |
           missing=()
-          [ -z "${{ secrets.AWS_ACCOUNT_ID }}" ] && missing+=("AWS_ACCOUNT_ID")
-          [ -z "${{ secrets.AWS_DEPLOY_ROLE_ARN }}" ] && missing+=("AWS_DEPLOY_ROLE_ARN")
-          [ -z "${{ secrets.DEPLOY_HOST }}" ] && missing+=("DEPLOY_HOST")
-          [ -z "${{ secrets.DEPLOY_USER }}" ] && missing+=("DEPLOY_USER")
-          [ -z "${{ secrets.DEPLOY_SSH_KEY }}" ] && missing+=("DEPLOY_SSH_KEY")
+          [ -z "$AWS_ACCOUNT_ID" ] && missing+=("AWS_ACCOUNT_ID")
+          [ -z "$AWS_DEPLOY_ROLE_ARN" ] && missing+=("AWS_DEPLOY_ROLE_ARN")
+          [ -z "$DEPLOY_HOST" ] && missing+=("DEPLOY_HOST")
+          [ -z "$DEPLOY_USER" ] && missing+=("DEPLOY_USER")
+          [ -z "$DEPLOY_SSH_KEY" ] && missing+=("DEPLOY_SSH_KEY")
 
           if [ ${#missing[@]} -gt 0 ]; then
             echo "ready=false" >> "$GITHUB_OUTPUT"
@@ -123,7 +129,7 @@ jobs:
             docker image prune -f
 
       - name: Notify deployment
-        if: always() && steps.preflight.outputs.ready == 'true'
+        if: failure() || (success() && steps.preflight.outputs.ready == 'true')
         run: |
           STATUS=${{ job.status }}
-          echo "Deployment $STATUS for version ${{ steps.version.outputs.VERSION }}"
+          echo "Deployment $STATUS for version ${{ github.ref_name }}"
