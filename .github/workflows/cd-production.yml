@@ -123,7 +123,7 @@ jobs:
           exit 1
 
       - name: Notify deployment
-        if: always()
+        if: always() && steps.preflight.outputs.ready == 'true'
         run: |
           STATUS=${{ job.status }}
           echo "Deployment $STATUS for version ${{ steps.version.outputs.VERSION }}"
