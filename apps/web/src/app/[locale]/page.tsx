@@ -141,7 +141,7 @@ export default function HomePage() {
               <Link href={`/${currentLocale}/login`} className="btn-ghost text-sm">
                 {t('nav.login')}
               </Link>
-              <Link href="mailto:mohammedparvezofficial@gmail.com" className="btn-ghost text-sm">
+              <Link href="mailto:pocketjuryai@gmail.com" className="btn-ghost text-sm">
                 {t('nav.contactUs')}
               </Link>
               <Link href={`/${currentLocale}/register`} className="btn-primary text-sm">
@@ -162,7 +162,7 @@ export default function HomePage() {
             <Link href={`/${currentLocale}/login`} className="btn-ghost text-sm">
               {t('nav.login')}
             </Link>
-            <Link href="mailto:mohammedparvezofficial@gmail.com" className="btn-ghost text-sm">
+            <Link href="mailto:pocketjuryai@gmail.com" className="btn-ghost text-sm">
               {t('nav.contactUs')}
             </Link>
             <Link href={`/${currentLocale}/register`} className="btn-primary text-sm">
@@ -205,7 +205,7 @@ export default function HomePage() {
                 <Shield className="h-4 w-4 flex-shrink-0" />
                 <span>{t('app.hero.disclaimer')}</span>
               </div>
-              <Link href="mailto:mohammedparvezofficial@gmail.com" className="btn-outline text-sm px-6 py-2">
+              <Link href="mailto:pocketjuryai@gmail.com" className="btn-outline text-sm px-6 py-2">
                 {t('nav.contactUs')}
               </Link>
             </div>
@@ -304,7 +304,7 @@ export default function HomePage() {
               <Link href={`/${currentLocale}/legal-sources`} target="_blank" rel="noopener noreferrer" className="text-muted hover:text-primary-600 dark:hover:text-blue-400 transition-colors">
                 {t('auth.legalSourcesLink')}
               </Link>
-              <Link href="mailto:mohammedparvezofficial@gmail.com" className="text-muted hover:text-primary-600 dark:hover:text-blue-400 transition-colors text-right">
+              <Link href="mailto:pocketjuryai@gmail.com" className="text-muted hover:text-primary-600 dark:hover:text-blue-400 transition-colors text-right">
                 {t('nav.contactUs')}
               </Link>
             </div>
