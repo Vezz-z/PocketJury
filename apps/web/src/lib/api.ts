@@ -73,14 +73,41 @@ export const authApi = {
   login: (data: { email: string; password: string }) =>
     fetchWithAuth('/auth/login', { method: 'POST', body: JSON.stringify(data) }).then((r) => r.json()),
 
-  googleAuth: (token: string) =>
-    fetchWithAuth('/auth/google', { method: 'POST', body: JSON.stringify({ idToken: token }) }).then((r) => r.json()),
+  googleAuth: (token: string, accessToken?: string) =>
+    fetchWithAuth('/auth/google', { method: 'POST', body: JSON.stringify({ idToken: token, accessToken }) }).then((r) => r.json()),
 
   refresh: () =>
     fetchWithAuth('/auth/refresh', { method: 'POST' }).then((r) => r.json()),
 
+  verifyEmail: (data: { email: string; code: string }) =>
+    fetchWithAuth('/auth/verify-email', { method: 'POST', body: JSON.stringify(data) }).then((r) => r.json()),
+
+  verifyMfa: (data: { email: string; code: string }) =>
+    fetchWithAuth('/auth/verify-mfa', { method: 'POST', body: JSON.stringify(data) }).then((r) => r.json()),
+
+  requestOtp: (email: string) =>
+    fetchWithAuth('/auth/otp/request', { method: 'POST', body: JSON.stringify({ email }) }).then((r) => r.json()),
+
+  verifyOtp: (data: { email: string; code: string }) =>
+    fetchWithAuth('/auth/otp/verify', { method: 'POST', body: JSON.stringify(data) }).then((r) => r.json()),
+
+  requestMagicLink: (email: string) =>
+    fetchWithAuth('/auth/magic-link/request', { method: 'POST', body: JSON.stringify({ email }) }).then((r) => r.json()),
+
   logout: () =>
     fetchWithAuth('/auth/logout', { method: 'POST' }).then((r) => r.json()),
+
+  changePassword: (data: { currentPassword: string; newPassword: string }) =>
+    fetchWithAuth('/auth/change-password', { method: 'POST', body: JSON.stringify(data) }).then((r) => r.json()),
+
+  forgotPassword: (email: string) =>
+    fetchWithAuth('/auth/forgot-password', { method: 'POST', body: JSON.stringify({ email }) }).then((r) => r.json()),
+
+  resetPassword: (data: { token: string; newPassword: string }) =>
+    fetchWithAuth('/auth/reset-password', { method: 'POST', body: JSON.stringify(data) }).then((r) => r.json()),
+
+  cancelOtp: (email: string) =>
+    fetchWithAuth('/auth/cancel-otp', { method: 'POST', body: JSON.stringify({ email }) }).then((r) => r.json()),
 };
 
 // ----- User -----
@@ -141,16 +168,6 @@ export const chatApi = {
 
   simplify: (chatId: string, messageId: string) =>
     fetchWithAuth(`/chats/${chatId}/messages/${messageId}/simplify`, { method: 'POST', timeout: 120000 }).then((r) => r.json()),
-
-  /**
-   * Stream the simplified response via SSE. Returns the raw Response so the
-   * caller can read the body as a ReadableStream.
-   */
-  simplifyStream: (chatId: string, messageId: string) =>
-    fetchWithAuth(`/chats/${chatId}/messages/${messageId}/simplify/stream`, {
-      method: 'POST',
-      timeout: 120000,
-    }),
 
   getReferences: (chatId: string, messageId: string) =>
     fetchWithAuth(`/chats/${chatId}/messages/${messageId}/references`, { method: 'POST' }).then((r) => r.json()),

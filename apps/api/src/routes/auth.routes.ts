@@ -4,14 +4,18 @@
 
 import { Router, Request, Response, NextFunction } from "express";
 import { z } from "zod";
+import { OAuth2Client } from "google-auth-library";
 import { authService } from "../services/auth.service";
 import { authMiddleware } from "../middleware/auth";
-import { authLimiter, registerLimiter } from "../middleware/rateLimiter";
+import { authLimiter, registerLimiter, otpLimiter, magicLinkLimiter } from "../middleware/rateLimiter";
 import { auditLog } from "../middleware/audit";
 import { validate } from "../middleware/validate";
 import { verifyRefreshToken } from "../utils/jwt";
 import { env } from "../config/env";
 import { CACHE_TTL } from "@pocketjury/shared";
+
+// Initialize Google OAuth2 client for server-side ID token verification
+const googleClient = new OAuth2Client(env.GOOGLE_CLIENT_ID);
 
 const router = Router();
 
@@ -35,10 +39,29 @@ const loginSchema = z.object({
 
 const googleAuthSchema = z.object({
   idToken: z.string().min(1),
+  accessToken: z.string().min(1).optional(),
+});
+
+const verifySchema = z.object({
+  email: z.string().email(),
+  code: z.string().min(6).max(6),
 });
 
 const refreshSchema = z.object({
   refreshToken: z.string().min(1).optional(),
+});
+
+const otpRequestSchema = z.object({
+  email: z.string().email(),
+});
+
+const otpVerifySchema = z.object({
+  email: z.string().email(),
+  code: z.string().length(6, "Code must be 6 digits"),
+});
+
+const magicLinkRequestSchema = z.object({
+  email: z.string().email(),
 });
 
 // POST /api/v1/auth/register
@@ -50,6 +73,14 @@ router.post(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const result = await authService.register(req.body);
+
+      if (result.mfaRequired) {
+        res.status(202).json({
+          mfaRequired: true,
+          message: "Verification code sent to email",
+        });
+        return;
+      }
 
       res.cookie("accessToken", result.accessToken, {
         httpOnly: true,
@@ -69,6 +100,7 @@ router.post(
       res.status(201).json({
         user: result.user,
         accessToken: result.accessToken,
+        mfaRequired: false,
       });
     } catch (err) {
       next(err);
@@ -90,6 +122,14 @@ router.post(
         ip: req.ip || "unknown",
       });
 
+      if (result.mfaRequired) {
+        res.status(202).json({
+          mfaRequired: true,
+          message: "MFA code sent to email",
+        });
+        return;
+      }
+
       res.cookie("accessToken", result.accessToken, {
         httpOnly: true,
         secure: process.env.NODE_ENV === "production",
@@ -105,7 +145,7 @@ router.post(
         path: "/api/v1/auth/refresh",
       });
 
-      res.json({ user: result.user, accessToken: result.accessToken });
+      res.json({ user: result.user, accessToken: result.accessToken, mfaRequired: false });
     } catch (err) {
       next(err);
     }
@@ -120,34 +160,24 @@ router.post(
   auditLog("GOOGLE_AUTH"),
   async (req: Request, res: Response, next: NextFunction) => {
     try {
-      // In production, verify the idToken with Google's token info endpoint
-      // For now, we trust the token and extract claims
-      const tokenInfoResponse = await fetch(
-        `https://oauth2.googleapis.com/tokeninfo?id_token=${req.body.idToken}`
-      );
+      // Cryptographically verify the Google ID token using google-auth-library
+      // This validates the token signature, expiry, audience, and issuer
+      const ticket = await googleClient.verifyIdToken({
+        idToken: req.body.idToken,
+        audience: env.GOOGLE_CLIENT_ID,
+      });
 
-      if (!tokenInfoResponse.ok) {
-        res.status(401).json({ error: "Invalid Google token" });
-        return;
-      }
-
-      const tokenInfo = await tokenInfoResponse.json() as {
-        sub: string;
-        email: string;
-        name: string;
-        aud: string;
-      };
-
-      // Verify the token was issued for our application
-      if (env.GOOGLE_CLIENT_ID && tokenInfo.aud !== env.GOOGLE_CLIENT_ID) {
-        res.status(401).json({ error: "Token audience mismatch" });
+      const payload = ticket.getPayload();
+      if (!payload || !payload.sub || !payload.email) {
+        res.status(401).json({ error: "Invalid Google token payload" });
         return;
       }
 
       const result = await authService.googleAuth(
-        tokenInfo.sub,
-        tokenInfo.email,
-        tokenInfo.name
+        payload.sub,
+        payload.email,
+        payload.name || payload.email.split("@")[0],
+        req.body.accessToken
       );
 
       res.cookie("accessToken", result.accessToken, {
@@ -155,6 +185,14 @@ router.post(
         secure: process.env.NODE_ENV === "production",
         sameSite: "strict",
         maxAge: 15 * 60 * 1000,
+      });
+
+      res.cookie("refreshToken", result.refreshToken, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "strict",
+        maxAge: 7 * 24 * 60 * 60 * 1000,
+        path: "/api/v1/auth/refresh",
       });
 
       res.json({ user: result.user, accessToken: result.accessToken });
@@ -209,6 +247,187 @@ router.post(
   }
 );
 
+// POST /api/v1/auth/verify-email
+router.post(
+  "/verify-email",
+  authLimiter,
+  validate(verifySchema),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const result = await authService.verifyEmail(req.body.email, req.body.code);
+
+      if (result.mfaRequired) {
+        res.status(202).json({
+          mfaRequired: true,
+          message: "MFA code sent to email",
+        });
+        return;
+      }
+
+      res.cookie("accessToken", result.accessToken, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "strict",
+        maxAge: 15 * 60 * 1000,
+      });
+
+      res.cookie("refreshToken", result.refreshToken, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "strict",
+        maxAge: CACHE_TTL.REFRESH_TOKEN * 1000,
+        path: "/api/v1/auth/refresh",
+      });
+
+      res.json({ user: result.user, accessToken: result.accessToken, mfaRequired: false });
+    } catch (err) {
+      next(err);
+    }
+  }
+);
+
+// POST /api/v1/auth/verify-mfa
+router.post(
+  "/verify-mfa",
+  authLimiter,
+  validate(verifySchema),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const result = await authService.verifyMfa(req.body.email, req.body.code);
+
+      res.cookie("accessToken", result.accessToken, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "strict",
+        maxAge: 15 * 60 * 1000,
+      });
+
+      res.cookie("refreshToken", result.refreshToken, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "strict",
+        maxAge: CACHE_TTL.REFRESH_TOKEN * 1000,
+        path: "/api/v1/auth/refresh",
+      });
+
+      res.json({ user: result.user, accessToken: result.accessToken, mfaRequired: false });
+    } catch (err) {
+      next(err);
+    }
+  }
+);
+
+// POST /api/v1/auth/otp/request
+router.post(
+  "/otp/request",
+  otpLimiter,
+  validate(otpRequestSchema),
+  auditLog("OTP_REQUEST"),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const result = await authService.requestOtpLogin(
+        req.body.email,
+        req.ip || "unknown"
+      );
+      res.json(result);
+    } catch (err) {
+      next(err);
+    }
+  }
+);
+
+// POST /api/v1/auth/otp/verify
+router.post(
+  "/otp/verify",
+  authLimiter,
+  validate(otpVerifySchema),
+  auditLog("OTP_VERIFY"),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const result = await authService.verifyOtpLogin(
+        req.body.email,
+        req.body.code,
+        req.ip || "unknown"
+      );
+
+      res.cookie("accessToken", result.accessToken, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "strict",
+        maxAge: 15 * 60 * 1000,
+      });
+
+      res.cookie("refreshToken", result.refreshToken, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "strict",
+        maxAge: CACHE_TTL.REFRESH_TOKEN * 1000,
+        path: "/api/v1/auth/refresh",
+      });
+
+      res.json({ user: result.user, accessToken: result.accessToken });
+    } catch (err) {
+      next(err);
+    }
+  }
+);
+
+// POST /api/v1/auth/magic-link/request
+router.post(
+  "/magic-link/request",
+  magicLinkLimiter,
+  validate(magicLinkRequestSchema),
+  auditLog("MAGIC_LINK_REQUEST"),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const result = await authService.requestMagicLink(
+        req.body.email,
+        req.ip || "unknown"
+      );
+      res.json(result);
+    } catch (err) {
+      next(err);
+    }
+  }
+);
+
+// GET /api/v1/auth/magic-link/verify
+router.get(
+  "/magic-link/verify",
+  authLimiter,
+  auditLog("MAGIC_LINK_VERIFY"),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const token = req.query.token as string;
+      if (!token) {
+        res.status(400).json({ error: "Token is required" });
+        return;
+      }
+
+      const result = await authService.verifyMagicLink(token);
+
+      res.cookie("accessToken", result.accessToken, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "strict",
+        maxAge: 15 * 60 * 1000,
+      });
+
+      res.cookie("refreshToken", result.refreshToken, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "strict",
+        maxAge: CACHE_TTL.REFRESH_TOKEN * 1000,
+        path: "/api/v1/auth/refresh",
+      });
+
+      res.json({ user: result.user, accessToken: result.accessToken });
+    } catch (err) {
+      next(err);
+    }
+  }
+);
+
 // POST /api/v1/auth/logout
 router.post(
   "/logout",
@@ -230,4 +449,96 @@ router.post(
   }
 );
 
+// -- Validation schemas for new routes --
+const changePasswordSchema = z.object({
+  currentPassword: z.string().min(1),
+  newPassword: z.string().min(8).max(128),
+});
+
+const forgotPasswordSchema = z.object({
+  email: z.string().email(),
+});
+
+const resetPasswordSchema = z.object({
+  token: z.string().min(1),
+  newPassword: z.string().min(8).max(128),
+});
+
+const cancelOtpSchema = z.object({
+  email: z.string().email(),
+});
+
+// POST /api/v1/auth/change-password
+router.post(
+  "/change-password",
+  authMiddleware,
+  validate(changePasswordSchema),
+  auditLog("CHANGE_PASSWORD"),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      if (!req.user?.sub) {
+        res.status(401).json({ error: "Authentication required" });
+        return;
+      }
+      await authService.changePassword(
+        req.user.sub,
+        req.body.currentPassword,
+        req.body.newPassword
+      );
+      res.json({ message: "Password changed successfully" });
+    } catch (err) {
+      next(err);
+    }
+  }
+);
+
+// POST /api/v1/auth/forgot-password
+router.post(
+  "/forgot-password",
+  authLimiter,
+  validate(forgotPasswordSchema),
+  auditLog("FORGOT_PASSWORD"),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const result = await authService.requestPasswordReset(req.body.email);
+      res.json(result);
+    } catch (err) {
+      next(err);
+    }
+  }
+);
+
+// POST /api/v1/auth/reset-password
+router.post(
+  "/reset-password",
+  authLimiter,
+  validate(resetPasswordSchema),
+  auditLog("RESET_PASSWORD"),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      await authService.resetPassword(req.body.token, req.body.newPassword);
+      res.json({ message: "Password reset successfully" });
+    } catch (err) {
+      next(err);
+    }
+  }
+);
+
+// POST /api/v1/auth/cancel-otp
+router.post(
+  "/cancel-otp",
+  authLimiter,
+  validate(cancelOtpSchema),
+  auditLog("CANCEL_OTP"),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      await authService.cancelOtpSession(req.body.email);
+      res.json({ message: "OTP session cancelled" });
+    } catch (err) {
+      next(err);
+    }
+  }
+);
+
 export default router;
+

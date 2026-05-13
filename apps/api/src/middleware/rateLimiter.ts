@@ -57,6 +57,18 @@ export function rateLimiter(
 // Pre-configured limiters
 export const authLimiter = rateLimiter("auth", 5, 60);
 export const registerLimiter = rateLimiter("register", 20, 3600);
+export const otpLimiter = rateLimiter(
+  "otp",
+  5,
+  3600,
+  (req) => req.body?.email?.toLowerCase() || req.ip || "unknown"
+);
+export const magicLinkLimiter = rateLimiter(
+  "magic-link",
+  5,
+  3600,
+  (req) => req.body?.email?.toLowerCase() || req.ip || "unknown"
+);
 export const queryLimiter = rateLimiter(
   "query",
   10,

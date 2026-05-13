@@ -23,7 +23,10 @@ import {
   MapPin,
   Briefcase,
   GraduationCap,
-  Scale
+  Scale,
+  Lock,
+  Eye,
+  EyeOff
 } from 'lucide-react';
 import Link from 'next/link';
 import { useTheme } from 'next-themes';
@@ -59,9 +62,15 @@ export default function SettingsPage() {
   const updateLanguage = useAuthStore((s) => s.updateLanguage);
   const updatePersona = useAuthStore((s) => s.updatePersona);
   const logout = useAuthStore((s) => s.logout);
+  const changePassword = useAuthStore((s) => s.changePassword);
+  const isLoading = useAuthStore((s) => s.isLoading);
 
   const [deleteAccountConfirmOpen, setDeleteAccountConfirmOpen] = useState(false);
   const [isEditProfileOpen, setIsEditProfileOpen] = useState(false);
+  const [currentPwd, setCurrentPwd] = useState('');
+  const [newPwd, setNewPwd] = useState('');
+  const [confirmPwd, setConfirmPwd] = useState('');
+  const [showPwd, setShowPwd] = useState(false);
 
   const handleLanguageChange = async (lang: string) => {
     try {
@@ -260,6 +269,77 @@ export default function SettingsPage() {
             </button>
           ))}
         </div>
+      </section>
+
+      {/* Security — Change Password */}
+      <section className="card p-6">
+        <div className="flex items-center gap-2 mb-4">
+          <Lock className="h-5 w-5 text-primary-600 dark:text-blue-400" />
+          <h2 className="text-lg font-semibold text-heading">{tAuth('changePassword')}</h2>
+        </div>
+
+        {user?.authProvider === 'GOOGLE' && !user?.profile ? (
+          <p className="text-sm text-muted">{tAuth('passwordManagedByGoogle')}</p>
+        ) : (
+          <div className="space-y-3">
+            <div className="relative">
+              <input
+                type={showPwd ? 'text' : 'password'}
+                placeholder={tAuth('currentPassword')}
+                value={currentPwd}
+                onChange={(e) => setCurrentPwd(e.target.value)}
+                className="input pr-10"
+              />
+              <button
+                type="button"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted hover:text-heading"
+                onClick={() => setShowPwd(!showPwd)}
+              >
+                {showPwd ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </button>
+            </div>
+            <input
+              type={showPwd ? 'text' : 'password'}
+              placeholder={tAuth('newPassword')}
+              value={newPwd}
+              onChange={(e) => setNewPwd(e.target.value)}
+              className="input"
+            />
+            <input
+              type={showPwd ? 'text' : 'password'}
+              placeholder={tAuth('confirmNewPassword')}
+              value={confirmPwd}
+              onChange={(e) => setConfirmPwd(e.target.value)}
+              className="input"
+            />
+            {newPwd && confirmPwd && newPwd !== confirmPwd && (
+              <p className="text-xs text-red-600 dark:text-red-400">Passwords do not match</p>
+            )}
+            <button
+              className="btn-primary w-full py-2.5"
+              disabled={isLoading || !currentPwd || !newPwd || newPwd !== confirmPwd || newPwd.length < 8}
+              onClick={async () => {
+                try {
+                  await changePassword(currentPwd, newPwd);
+                  toast.success(tAuth('passwordChanged'));
+                  setCurrentPwd('');
+                  setNewPwd('');
+                  setConfirmPwd('');
+                } catch {
+                  toast.error(tAuth('loginError'));
+                }
+              }}
+            >
+              {tAuth('changePassword')}
+            </button>
+            <a
+              href="/forgot-password"
+              className="text-sm text-primary-600 dark:text-blue-400 hover:underline block text-center"
+            >
+              {tAuth('forgotCurrentPassword')} {tAuth('resetItHere')}
+            </a>
+          </div>
+        )}
       </section>
 
       {/* Privacy & Data */}

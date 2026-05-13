@@ -32,7 +32,7 @@ export const metadata: Metadata = {
     'DLSA',
     'legal rights India',
   ],
-  manifest: '/manifest.json',
+  manifest: '/manifest.webmanifest',
   icons: {
     icon: '/icon.svg',
     apple: '/apple-touch-icon.png',
@@ -58,12 +58,11 @@ export const viewport: Viewport = {
 
 export default async function RootLayout({
   children,
-  params,
+  params: { locale },
 }: {
   children: React.ReactNode;
-  params: Promise<{ locale: string }>;
+  params: { locale: string };
 }) {
-  const { locale } = await params;
   const messages = await getMessages();
 
   const dir = locale === 'ar' || locale === 'ur' ? 'rtl' : 'ltr';

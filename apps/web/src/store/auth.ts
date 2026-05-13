@@ -3,8 +3,33 @@
 // ==============================================================================
 
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
+import { persist, createJSONStorage, StateStorage } from 'zustand/middleware';
 import { authApi, userApi } from '@/lib/api';
+
+const cookieStorage: StateStorage = {
+  getItem: (name: string): string | null => {
+    if (typeof document === 'undefined') return null;
+    const value = `; ${document.cookie}`;
+    const parts = value.split(`; ${name}=`);
+    if (parts.length === 2) return decodeURIComponent(parts.pop()?.split(';').shift() || '');
+    return null;
+  },
+  setItem: (name: string, value: string): void => {
+    if (typeof document === 'undefined') return;
+    const rememberMe = typeof window !== 'undefined' ? localStorage.getItem('pocketjury-remember') === 'true' : false;
+    let expires = '';
+    if (rememberMe) {
+      const date = new Date();
+      date.setTime(date.getTime() + (7 * 24 * 60 * 60 * 1000));
+      expires = `; expires=${date.toUTCString()}`;
+    }
+    document.cookie = `${name}=${encodeURIComponent(value)}${expires}; path=/; samesite=strict`;
+  },
+  removeItem: (name: string): void => {
+    if (typeof document === 'undefined') return;
+    document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;`;
+  },
+};
 
 interface User {
   id: string;
@@ -12,6 +37,7 @@ interface User {
   role: string;
   preferredLanguage: string;
   personaMode: string;
+  authProvider?: string;
   profile?: {
     fullName?: string;
     dateOfBirth?: string;
@@ -20,7 +46,7 @@ interface User {
     professionType?: string;
     fieldOfStudy?: string;
     currentProfession?: string;
-    isProfileComplete: boolean;
+    profileCompleted: boolean;
   };
 }
 
@@ -30,9 +56,12 @@ interface AuthState {
   isLoading: boolean;
   error: string | null;
 
-  login: (email: string, password: string) => Promise<void>;
-  register: (email: string, password: string, fullName: string, dateOfBirth: string, preferredLanguage?: string) => Promise<void>;
-  googleAuth: (token: string) => Promise<void>;
+  login: (email: string, password: string) => Promise<any>;
+  register: (email: string, password: string, fullName: string, dateOfBirth: string, preferredLanguage?: string) => Promise<any>;
+  verifyEmail: (email: string, code: string) => Promise<void>;
+  verifyMfa: (email: string, code: string) => Promise<void>;
+  googleAuth: (token: string, accessToken?: string) => Promise<void>;
+  changePassword: (currentPassword: string, newPassword: string) => Promise<void>;
   logout: () => Promise<void>;
   fetchProfile: () => Promise<void>;
   updateProfile: (data: Record<string, unknown>) => Promise<void>;
@@ -53,7 +82,12 @@ export const useAuthStore = create<AuthState>()(
         set({ isLoading: true, error: null });
         try {
           const data = await authApi.login({ email, password });
+          if (data.mfaRequired) {
+            set({ isLoading: false });
+            return data;
+          }
           set({ user: data.user, isAuthenticated: true, isLoading: false });
+          return data;
         } catch (err: unknown) {
           const message = err instanceof Error ? err.message : 'Login failed';
           set({ error: message, isLoading: false });
@@ -65,7 +99,12 @@ export const useAuthStore = create<AuthState>()(
         set({ isLoading: true, error: null });
         try {
           const data = await authApi.register({ email, password, fullName, dateOfBirth, preferredLanguage });
+          if (data.mfaRequired) {
+             set({ isLoading: false });
+             return data;
+          }
           set({ user: data.user, isAuthenticated: true, isLoading: false });
+          return data;
         } catch (err: unknown) {
           let message = 'Registration failed';
           if (err && typeof err === 'object' && 'status' in err && (err as { status: number }).status === 409) {
@@ -83,10 +122,38 @@ export const useAuthStore = create<AuthState>()(
         }
       },
 
-      googleAuth: async (token) => {
+      verifyEmail: async (email, code) => {
         set({ isLoading: true, error: null });
         try {
-          const data = await authApi.googleAuth(token);
+          const data = await authApi.verifyEmail({ email, code });
+          if (data.mfaRequired) {
+             set({ isLoading: false });
+             throw new Error("MFA Required");
+          }
+          set({ user: data.user, isAuthenticated: true, isLoading: false });
+        } catch (err: unknown) {
+          const message = err instanceof Error ? err.message : 'Verification failed';
+          set({ error: message, isLoading: false });
+          throw err;
+        }
+      },
+
+      verifyMfa: async (email, code) => {
+        set({ isLoading: true, error: null });
+        try {
+          const data = await authApi.verifyMfa({ email, code });
+          set({ user: data.user, isAuthenticated: true, isLoading: false });
+        } catch (err: unknown) {
+          const message = err instanceof Error ? err.message : 'MFA failed';
+          set({ error: message, isLoading: false });
+          throw err;
+        }
+      },
+
+      googleAuth: async (token, accessToken) => {
+        set({ isLoading: true, error: null });
+        try {
+          const data = await authApi.googleAuth(token, accessToken);
           set({ user: data.user, isAuthenticated: true, isLoading: false });
         } catch (err: unknown) {
           const message = err instanceof Error ? err.message : 'Google auth failed';
@@ -142,10 +209,23 @@ export const useAuthStore = create<AuthState>()(
         }
       },
 
+      changePassword: async (currentPassword, newPassword) => {
+        set({ isLoading: true, error: null });
+        try {
+          await authApi.changePassword({ currentPassword, newPassword });
+          set({ isLoading: false });
+        } catch (err: unknown) {
+          const message = err instanceof Error ? err.message : 'Password change failed';
+          set({ error: message, isLoading: false });
+          throw err;
+        }
+      },
+
       clearError: () => set({ error: null }),
     }),
     {
       name: 'pocketjury-auth',
+      storage: createJSONStorage(() => cookieStorage),
       partialize: (state) => ({
         user: state.user,
         isAuthenticated: state.isAuthenticated,

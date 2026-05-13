@@ -34,6 +34,13 @@ export default function AppLayout({ children }: { children: ReactNode }) {
       return;
     }
     fetchProfile()
+      .then(() => {
+        const user = useAuthStore.getState().user;
+        const currentPath = window.location.pathname;
+        if (user && !user.profile?.profileCompleted && !currentPath.includes('/onboarding')) {
+           router.push('/onboarding');
+        }
+      })
       .catch(() => {
         router.push('/login');
       })
