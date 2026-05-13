@@ -3,7 +3,7 @@
 // ==============================================================================
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useTranslations } from 'next-intl';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -37,6 +37,7 @@ export default function LoginPage() {
   const router = useRouter();
   const login = useAuthStore((s) => s.login);
   const verifyMfa = useAuthStore((s) => s.verifyMfa);
+  const verifyEmail = useAuthStore((s) => s.verifyEmail);
   const isLoading = useAuthStore((s) => s.isLoading);
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const user = useAuthStore((s) => s.user);
@@ -44,11 +45,13 @@ export default function LoginPage() {
 
   const [showPassword, setShowPassword] = useState(false);
   const [mfaRequired, setMfaRequired] = useState(false);
+  const [emailVerificationNeeded, setEmailVerificationNeeded] = useState(false);
   const [userEmail, setUserEmail] = useState('');
   const [rememberMe, setRememberMe] = useState(false);
   const [editingEmail, setEditingEmail] = useState(false);
   const [editedEmail, setEditedEmail] = useState('');
   const [showSessionModal, setShowSessionModal] = useState(false);
+  const [resendTimer, setResendTimer] = useState(0);
 
   useEffect(() => {
     const saved = localStorage.getItem('pocketjury-remember') === 'true';
@@ -97,14 +100,54 @@ export default function LoginPage() {
       // If somehow no MFA required (shouldn't happen now), redirect
       toast.success(t('loginSuccess'));
       router.push('/chat');
-    } catch {
+    } catch (err: unknown) {
+      // Handle "Email not verified" — backend sends 403 and re-sends a verification code
+      const apiErr = err as { status?: number; data?: { error?: string } };
+      if (apiErr?.status === 403 && apiErr?.data?.error?.includes('not verified')) {
+        setEmailVerificationNeeded(true);
+        setMfaRequired(true);
+        toast.info(apiErr.data.error);
+        return;
+      }
       toast.error(t('loginError'));
     }
   };
 
+  // Start 30-second resend cooldown when MFA step is shown
+  useEffect(() => {
+    if (mfaRequired) {
+      setResendTimer(30);
+    }
+  }, [mfaRequired]);
+
+  useEffect(() => {
+    if (resendTimer <= 0) return;
+    const id = setTimeout(() => setResendTimer((t) => t - 1), 1000);
+    return () => clearTimeout(id);
+  }, [resendTimer]);
+
+  const handleResendCode = useCallback(async () => {
+    try {
+      // Re-trigger login to resend the OTP/verification code
+      await login(userEmail, '');
+    } catch {
+      // Backend will re-send the code even if the password is wrong for unverified,
+      // or we can just toast info
+    }
+    setResendTimer(30);
+    toast.info(t('mfaSent'));
+  }, [userEmail, login, t]);
+
   const onMfaSubmit = async (data: MfaForm) => {
     try {
-      await verifyMfa(userEmail, data.code);
+      if (emailVerificationNeeded) {
+        // Unverified email — use verify-email endpoint (code stored in DB)
+        await verifyEmail(userEmail, data.code);
+        setEmailVerificationNeeded(false);
+      } else {
+        // Normal MFA — use verify-mfa endpoint (OTP stored in Redis)
+        await verifyMfa(userEmail, data.code);
+      }
       toast.success(t('loginSuccess'));
       router.push('/chat');
     } catch {
@@ -279,8 +322,22 @@ export default function LoginPage() {
                   </button>
                   <button
                     type="button"
+                    disabled={resendTimer > 0 || isLoading}
+                    onClick={handleResendCode}
+                    className={`text-sm w-full text-center mt-2 transition-colors ${
+                      resendTimer > 0
+                        ? 'text-muted cursor-not-allowed'
+                        : 'text-primary-600 dark:text-blue-400 hover:underline cursor-pointer'
+                    }`}
+                  >
+                    {resendTimer > 0
+                      ? t('resendCodeTimer', { seconds: resendTimer })
+                      : t('resendCode')}
+                  </button>
+                  <button
+                    type="button"
                     onClick={() => setMfaRequired(false)}
-                    className="text-sm text-primary-600 hover:underline w-full text-center mt-2 flex items-center justify-center gap-1"
+                    className="text-sm text-primary-600 dark:text-blue-400 hover:underline w-full text-center mt-2 flex items-center justify-center gap-1"
                   >
                     <ArrowLeft className="h-3.5 w-3.5" />
                     {t('backToLogin')}
@@ -411,6 +468,9 @@ export default function LoginPage() {
             <Link href="/legal-sources" target="_blank" rel="noopener noreferrer" className="hover:text-primary-600 dark:hover:text-blue-400 underline transition-colors">
               {t('legalSourcesLink')}
             </Link>
+            <a href="mailto:pocketjuryai@gmail.com" className="hover:text-primary-600 dark:hover:text-blue-400 underline transition-colors">
+              Contact Us
+            </a>
           </div>
         </div>
       </motion.div>

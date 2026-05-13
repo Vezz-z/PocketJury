@@ -256,20 +256,54 @@ export class AuthService {
       throw createError("Email not verified. A new code has been sent.", 403);
     }
 
-    // Always require OTP verification after password login
-    const otp = this.generateCode();
-    const otpHash = this.hashOtp(otp);
-    const otpKey = this.getOtpRedisKey(emailHash);
-    const ttl = env.OTP_TTL_SECONDS;
+    if (user.mfaEnabled) {
+      const otp = this.generateCode();
+      const otpHash = this.hashOtp(otp);
+      const otpKey = this.getOtpRedisKey(emailHash);
+      const ttl = env.OTP_TTL_SECONDS;
 
-    await redis.set(
-      otpKey,
-      JSON.stringify({ hash: otpHash, attempts: 0 }),
-      "EX",
-      ttl
-    );
-    await sendMfaEmail(input.email, otp);
-    return { mfaRequired: true };
+      await redis.set(
+        otpKey,
+        JSON.stringify({ hash: otpHash, attempts: 0 }),
+        "EX",
+        ttl
+      );
+      await sendMfaEmail(input.email, otp);
+      return { mfaRequired: true };
+    }
+
+    // User is verified and MFA is not required -> Issue tokens directly
+    const sessionId = randomUUID();
+    const accessToken = await signAccessToken({
+      userId: user.id,
+      role: user.role,
+      lang: user.preferredLanguage,
+      sessionId,
+    });
+    const refreshToken = await signRefreshToken(user.id, sessionId);
+    await redis.set(this.getSessionRefreshKey(user.id, sessionId), refreshToken, "EX", CACHE_TTL.REFRESH_TOKEN);
+
+    return {
+      user: {
+        id: user.id,
+        email: input.email,
+        authProvider: user.authProvider,
+        googleId: user.googleId,
+        role: user.role,
+        preferredLanguage: user.preferredLanguage,
+        isVerified: user.isVerified,
+        profile: user.profile
+          ? {
+            fullName: "[encrypted]",
+            dateOfBirth: null,
+            personaMode: user.profile.personaMode,
+            profileCompleted: user.profile.profileCompleted,
+          }
+          : null,
+      },
+      accessToken,
+      refreshToken,
+    };
   }
 
   async googleAuth(googleId: string, email: string, name: string, googleAccessToken?: string): Promise<AuthResult> {

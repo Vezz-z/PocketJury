@@ -18,6 +18,8 @@ import {
   ChevronRight,
   ArrowRight,
   ChevronDown,
+  Menu,
+  X,
 } from 'lucide-react';
 import { ThemeToggle } from '@/components/ui/ThemeToggle';
 
@@ -42,6 +44,7 @@ export default function HomePage() {
   const router = useRouter();
   const pathname = usePathname();
   const [langOpen, setLangOpen] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const langRef = useRef<HTMLDivElement>(null);
 
   // Detect current locale from pathname
@@ -134,15 +137,43 @@ export default function HomePage() {
               )}
             </div>
             <ThemeToggle />
-            <Link href={`/${currentLocale}/login`} className="btn-ghost text-sm">
+            <div className="hidden min-[740px]:flex items-center gap-3">
+              <Link href={`/${currentLocale}/login`} className="btn-ghost text-sm">
+                {t('nav.login')}
+              </Link>
+              <a href="mailto:pocketjuryai@gmail.com" className="btn-ghost text-sm">
+                {t('common.contactUs') || 'Contact Us'}
+              </a>
+              <Link href={`/${currentLocale}/register`} className="btn-primary text-sm">
+                {t('nav.getStarted')}
+                <ChevronRight className="ml-1 h-4 w-4" />
+              </Link>
+            </div>
+            {/* Mobile simplified actions replaced by burger menu */}
+            <button
+              className="min-[740px]:hidden p-2 rounded-md hover:bg-elevated transition-colors text-body"
+              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+            >
+              {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+            </button>
+          </nav>
+        </div>
+
+        {/* Mobile menu dropdown */}
+        {mobileMenuOpen && (
+          <div className="min-[740px]:hidden border-t bg-card/95 backdrop-blur-md px-4 py-4 flex flex-col gap-3" style={{ borderColor: 'var(--color-border)' }}>
+            <Link href={`/${currentLocale}/login`} className="btn-ghost text-sm w-full justify-start">
               {t('nav.login')}
             </Link>
-            <Link href={`/${currentLocale}/register`} className="btn-primary text-sm">
+            <a href="mailto:pocketjuryai@gmail.com" className="btn-ghost text-sm w-full justify-start">
+              {t('common.contactUs') || 'Contact Us'}
+            </a>
+            <Link href={`/${currentLocale}/register`} className="btn-primary text-sm w-full justify-center mt-2">
               {t('nav.getStarted')}
               <ChevronRight className="ml-1 h-4 w-4" />
             </Link>
-          </nav>
-        </div>
+          </div>
+        )}
       </header>
 
       {/* Hero */}
@@ -273,6 +304,9 @@ export default function HomePage() {
               <Link href={`/${currentLocale}/legal-sources`} target="_blank" rel="noopener noreferrer" className="text-muted hover:text-primary-600 dark:hover:text-blue-400 transition-colors">
                 {t('auth.legalSourcesLink')}
               </Link>
+              <a href="mailto:pocketjuryai@gmail.com" className="text-muted hover:text-primary-600 dark:hover:text-blue-400 transition-colors">
+                {t('app.footer.contactUs')}
+              </a>
             </div>
             <p className="text-xs text-muted">
               © {new Date().getFullYear()} PocketJury. {t('app.footer.rights')}

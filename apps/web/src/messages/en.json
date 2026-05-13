@@ -36,7 +36,8 @@
     },
     "footer": {
       "disclaimer": "PocketJury is an AI-powered informational tool. It does not provide legal advice.",
-      "rights": "All rights reserved."
+      "rights": "All rights reserved.",
+      "contactUs": "Contact Us"
     }
   },
   "nav": {
@@ -135,7 +136,8 @@
     "resetItHere": "Reset it here",
     "googleAuthNotConfigured": "Google Sign-In not configured",
     "googleAuthUnavailable": "Google Sign-In unavailable",
-    "verificationSent": "Verification code sent to your email"
+    "verificationSent": "Verification code sent to your email",
+    "resendCodeTimer": "Resend code in {seconds}s"
   },
   "onboarding": {
     "title": "Let's personalize your experience",
@@ -349,7 +351,8 @@
     "deleteChatTitle": "Delete Chat",
     "deleteChatDesc": "Are you sure you want to delete this conversation?",
     "deleteAccountTitle": "Delete Account",
-    "deleteAccountDesc": "Are you sure you want to permanently delete your account?"
+    "deleteAccountDesc": "Are you sure you want to permanently delete your account?",
+    "contactUs": "Contact Us"
   },
   "consent": {
     "title": "Data Collection Consent",

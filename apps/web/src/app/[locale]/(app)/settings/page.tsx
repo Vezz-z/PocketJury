@@ -398,6 +398,13 @@ export default function SettingsPage() {
           >
             {t('legalSources')}
           </Link>
+          <a
+            href="mailto:pocketjuryai@gmail.com"
+            className="w-full flex items-center justify-start px-4 py-2.5 rounded-lg text-body hover:bg-elevated transition-colors text-sm font-medium"
+          >
+            <Mail className="h-4 w-4 mr-2" />
+            {tCommon('contactUs') || 'Contact Us'}
+          </a>
         </div>
       </section>
 

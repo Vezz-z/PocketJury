@@ -21,8 +21,9 @@ COPY apps/web/public ./public
 COPY apps/web/src ./src
 
 ENV NEXT_TELEMETRY_DISABLED=1
+ARG NEXT_PUBLIC_GOOGLE_CLIENT_ID
+ENV NEXT_PUBLIC_GOOGLE_CLIENT_ID=$NEXT_PUBLIC_GOOGLE_CLIENT_ID
 RUN npm run build
-
 # Stage 3: Runner
 FROM node:20-alpine AS runner
 WORKDIR /app

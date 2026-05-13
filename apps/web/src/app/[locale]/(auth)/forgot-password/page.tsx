@@ -3,13 +3,15 @@
 // ==============================================================================
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useTranslations } from 'next-intl';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
-import { Scale, Mail, AlertCircle, ArrowLeft, CheckCircle } from 'lucide-react';
+import { Scale, Mail, AlertCircle, ArrowLeft, CheckCircle, Pencil } from 'lucide-react';
 import { authApi } from '@/lib/api';
 import { toast } from 'sonner';
+import { useAuthStore } from '@/store';
 import { ThemeToggle } from '@/components/ui/ThemeToggle';
 import { LanguageSwitcher } from '@/components/ui/LanguageSwitcher';
 import { useForm } from 'react-hook-form';
@@ -24,16 +26,29 @@ type ForgotForm = z.infer<typeof schema>;
 
 export default function ForgotPasswordPage() {
   const t = useTranslations('auth');
+  const router = useRouter();
+  const user = useAuthStore((s) => s.user);
+  const logout = useAuthStore((s) => s.logout);
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+
   const [isLoading, setIsLoading] = useState(false);
   const [sent, setSent] = useState(false);
 
   const {
     register,
     handleSubmit,
+    setValue,
     formState: { errors },
   } = useForm<ForgotForm>({
     resolver: zodResolver(schema),
+    defaultValues: { email: user?.email || '' },
   });
+
+  useEffect(() => {
+    if (isAuthenticated && user?.email) {
+      setValue('email', user.email);
+    }
+  }, [isAuthenticated, user, setValue]);
 
   const onSubmit = async (data: ForgotForm) => {
     setIsLoading(true);
@@ -91,7 +106,7 @@ export default function ForgotPasswordPage() {
               <p className="text-sm text-body">{t('resetLinkSent')}</p>
               <Link
                 href="/login"
-                className="text-sm text-primary-600 hover:underline flex items-center justify-center gap-1 mt-4"
+                className="text-sm text-primary-600 dark:text-blue-400 hover:underline flex items-center justify-center gap-1 mt-4"
               >
                 <ArrowLeft className="h-3.5 w-3.5" />
                 {t('backToLogin')}
@@ -109,11 +124,25 @@ export default function ForgotPasswordPage() {
                     id="email"
                     type="email"
                     autoComplete="email"
-                    className="input pl-10"
+                    className="input pl-10 pr-10"
                     placeholder={t('emailPlaceholder')}
-                    autoFocus
+                    readOnly={isAuthenticated}
+                    autoFocus={!isAuthenticated}
                     {...register('email')}
                   />
+                  {isAuthenticated && (
+                    <button
+                      type="button"
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted hover:text-heading"
+                      title="Change email"
+                      onClick={async () => {
+                        await logout();
+                        router.push('/login');
+                      }}
+                    >
+                      <Pencil className="h-4 w-4" />
+                    </button>
+                  )}
                 </div>
                 {errors.email && (
                   <p className="mt-1 text-xs text-red-600 dark:text-red-400 flex items-center gap-1">
@@ -134,7 +163,7 @@ export default function ForgotPasswordPage() {
               </button>
               <Link
                 href="/login"
-                className="text-sm text-primary-600 hover:underline w-full text-center mt-2 flex items-center justify-center gap-1"
+                className="text-sm text-primary-600 dark:text-blue-400 hover:underline w-full text-center mt-2 flex items-center justify-center gap-1"
               >
                 <ArrowLeft className="h-3.5 w-3.5" />
                 {t('backToLogin')}

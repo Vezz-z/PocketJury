@@ -36,7 +36,8 @@
     },
     "footer": {
       "disclaimer": "पॉकेटज्यूरी एक AI-संचालित सूचनात्मक उपकरण है। यह कानूनी सलाह प्रदान नहीं करता।",
-      "rights": "सर्वाधिकार सुरक्षित।"
+      "rights": "सर्वाधिकार सुरक्षित।",
+      "contactUs": "संपर्क करें"
     }
   },
   "nav": {
@@ -135,7 +136,8 @@
     "resetItHere": "यहाँ रीसेट करें",
     "googleAuthNotConfigured": "Google साइन-इन कॉन्फ़िगर नहीं है",
     "googleAuthUnavailable": "Google साइन-इन उपलब्ध नहीं है",
-    "verificationSent": "सत्यापन कोड आपके ईमेल पर भेजा गया है"
+    "verificationSent": "सत्यापन कोड आपके ईमेल पर भेजा गया है",
+    "resendCodeTimer": "{seconds} सेकंड में कोड पुनः भेजें"
   },
   "onboarding": {
     "title": "आइए आपके अनुभव को व्यक्तिगत बनाएं",
@@ -349,7 +351,8 @@
     "deleteChatTitle": "चैट हटाएं",
     "deleteChatDesc": "क्या आप वाकई इस बातचीत को हटाना चाहते हैं?",
     "deleteAccountTitle": "खाता हटाएं",
-    "deleteAccountDesc": "क्या आप वाकई अपना खाता स्थायी रूप से हटाना चाहते हैं?"
+    "deleteAccountDesc": "क्या आप वाकई अपना खाता स्थायी रूप से हटाना चाहते हैं?",
+    "contactUs": "संपर्क करें"
   },
   "consent": {
     "title": "डेटा संग्रह सहमति",

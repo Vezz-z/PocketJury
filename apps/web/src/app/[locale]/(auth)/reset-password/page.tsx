@@ -11,6 +11,7 @@ import { motion } from 'framer-motion';
 import { Scale, Lock, Eye, EyeOff, AlertCircle, Check, CheckCircle } from 'lucide-react';
 import { authApi } from '@/lib/api';
 import { toast } from 'sonner';
+import { useAuthStore } from '@/store';
 import { ThemeToggle } from '@/components/ui/ThemeToggle';
 import { LanguageSwitcher } from '@/components/ui/LanguageSwitcher';
 import { useForm } from 'react-hook-form';
@@ -48,6 +49,7 @@ export default function ResetPasswordPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const token = searchParams.get('token') || '';
+  const logout = useAuthStore((s) => s.logout);
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [success, setSuccess] = useState(false);
@@ -73,6 +75,7 @@ export default function ResetPasswordPage() {
       await authApi.resetPassword({ token, newPassword: data.newPassword });
       setSuccess(true);
       toast.success(t('resetPasswordSuccess'));
+      await logout(); // Terminate session to avoid popup on login page
       setTimeout(() => router.push('/login'), 2000);
     } catch {
       toast.error(t('resetPasswordError'));

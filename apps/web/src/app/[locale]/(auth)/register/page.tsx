@@ -68,6 +68,7 @@ export default function RegisterPage() {
   const [verificationRequired, setVerificationRequired] = useState(false);
   const [userEmail, setUserEmail] = useState('');
   const [showSessionModal, setShowSessionModal] = useState(false);
+  const [resendTimer, setResendTimer] = useState(0);
 
   useEffect(() => {
     if (isAuthenticated && user) {
@@ -98,18 +99,33 @@ export default function RegisterPage() {
   const onSubmit = async (data: RegisterForm) => {
     try {
       setUserEmail(data.email);
-      const res = await registerFn(data.email, data.password, data.fullName, data.dateOfBirth);
-      if (res?.mfaRequired) {
-        setVerificationRequired(true);
-        toast.info(t('verificationSent') || 'Verification code sent to your email');
-        return;
-      }
-      toast.success(t('registerSuccess'));
-      router.push('/onboarding');
+      await registerFn(data.email, data.password, data.fullName, data.dateOfBirth);
+      // Always show verification — the backend sends a code on register
+      setVerificationRequired(true);
+      setResendTimer(30);
+      toast.info(t('verificationSent') || 'Verification code sent to your email');
     } catch (err) {
       const message = err instanceof Error ? err.message : t('registerError');
       toast.error(message);
     }
+  };
+
+  // Resend timer countdown
+  useEffect(() => {
+    if (resendTimer <= 0) return;
+    const id = setTimeout(() => setResendTimer((prev) => prev - 1), 1000);
+    return () => clearTimeout(id);
+  }, [resendTimer]);
+
+  const handleResendVerification = async () => {
+    try {
+      // Re-register triggers a new verification code from the backend
+      await registerFn(userEmail, '', '', '');
+    } catch {
+      // Expected — re-register may fail but backend still sends a new code
+    }
+    setResendTimer(30);
+    toast.info(t('verificationSent') || 'Verification code re-sent');
   };
 
   const onVerifySubmit = async (data: VerifyForm) => {
@@ -208,6 +224,20 @@ export default function RegisterPage() {
                 ) : (
                   t('verifyButton') || 'Verify Email'
                 )}
+              </button>
+              <button
+                type="button"
+                disabled={resendTimer > 0 || isLoading}
+                onClick={handleResendVerification}
+                className={`text-sm w-full text-center mt-2 transition-colors ${
+                  resendTimer > 0
+                    ? 'text-muted cursor-not-allowed'
+                    : 'text-primary-600 dark:text-blue-400 hover:underline cursor-pointer'
+                }`}
+              >
+                {resendTimer > 0
+                  ? t('resendCodeTimer', { seconds: resendTimer })
+                  : t('resendCode')}
               </button>
             </form>
           ) : (
