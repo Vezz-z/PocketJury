@@ -15,6 +15,8 @@ Welcome to **PocketJury**! This application is designed to bridge the massive ga
 - **Semantic UI Chat Navigation**: Features instant-state message deletion, conversational tracking, "Simplify" toggles to reduce legal jargon, "Stop Generating" kill switches, and dynamic scroll handlers.
 - **Keyboard Power User Shortcuts**: Includes `Ctrl+Shift+K` (New Chat), `Ctrl+Alt+C` (Chats), `Ctrl+Alt+K` (Toggle Sidebar), and `Ctrl+Shift+S` (Settings) for rapid navigation.
 - **Built-in Safety Guardrails**: Sensitive queries (e.g., Domestic Violence or Child Exploitation) bypass normal pipelines to automatically surface National Emergency Helplines (like 181, 1098, and 1930).
+- **Google OAuth & MFA**: Supports "Continue with Google" sign-in/sign-up with server-side ID token verification. All email logins require OTP-based multi-factor authentication with secure email editing in the OTP step.
+- **Session-Aware Authentication**: Cross-tab session detection prompts users to continue with their existing account or sign in with a different one. Includes change password (Settings), forgot/reset password flows, and email domain validation.
 
 ---
 
@@ -23,7 +25,7 @@ Welcome to **PocketJury**! This application is designed to bridge the massive ga
 PocketJury is engineered as a **TurboRepo** monorepo powering five independent, Dockerized microservices. It is built to be run isolated and offline using the latest open-source AI frameworks.
 
 1. **Frontend (`apps/web`)**: Next.js 14 (App Router), TailwindCSS, Framer Motion, Zustand, Next-Intl
-2. **Backend API (`apps/api`)**: Node.js, Express, Prisma ORM, Zod, JWT RSA Authentication
+2. **Backend API (`apps/api`)**: Node.js, Express, Prisma ORM, Zod, JWT RSA Authentication, Google Auth Library
 3. **AI Pipeline (`services/ai`)**: Python, FastAPI, HuggingFace (`multilingual-e5-large` embedding maps), LangChain
 4. **Database (`postgres`)**: PostgreSQL 16 integrated natively with `pgvector` for semantic document retrieval
 5. **Caching (`redis`)**: Redis Alpine for API Rate limiting, auth debouncing, and tracking Chat session limits

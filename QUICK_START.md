@@ -98,6 +98,18 @@ JWT_PUBLIC_KEY="-----BEGIN PUBLIC KEY-----\nMIIBIjAN...\n-----END PUBLIC KEY----
 NEXTAUTH_SECRET=generate_a_random_32_character_string_here
 NEXTAUTH_URL=http://localhost:3000
 
+# Google OAuth (optional — for "Continue with Google" button)
+# Create credentials at https://console.cloud.google.com/apis/credentials
+GOOGLE_CLIENT_ID=your_google_client_id.apps.googleusercontent.com
+GOOGLE_CLIENT_SECRET=your_google_client_secret
+NEXT_PUBLIC_GOOGLE_CLIENT_ID=your_google_client_id.apps.googleusercontent.com
+
+# ==========================================
+# 🔒 ENCRYPTION
+# ==========================================
+# 32+ character random string for AES-256 field-level encryption
+ENCRYPTION_KEY=generate_a_random_64_hex_character_string_here
+
 # ==========================================
 # 🤖 AI PIPELINE CREDENTIALS
 # ==========================================

@@ -20,7 +20,15 @@ PocketJury has been built from the ground up as an offline-capable, highly secur
 - **Power User Shortcuts:** Introduced global keyboard shortcuts (`Ctrl+Shift+K` for New Chat, `Ctrl+Alt+C` for Chats, `Ctrl+Alt+K` to Toggle Sidebar, `Ctrl+Shift+S` for Settings) to navigate the app instantly.
 - **Multilingual Tooltips:** All UI hover elements, sidebars, and keyboard shortcut hints are now natively translated across all four supported languages.
 
----
+### 4. Authentication & Security Overhaul
+- **Google OAuth:** Users can now sign in or register using their Google account via the "Continue with Google" button, powered by Google Identity Services (GIS) with server-side ID token verification.
+- **Email Verification (MFA):** All new registrations require a 6-digit email verification code. Login flows now mandate OTP-based multi-factor authentication for enhanced security.
+- **Edit Email in OTP:** If a user enters the wrong email during OTP verification, they can now edit it inline. The previous OTP is securely cancelled via Redis, and a new code is sent after re-authentication.
+- **Session Awareness:** When a logged-in user visits `/login`, `/register`, or clicks "Get Started" on the landing page, a modal prompts them to either continue with their current session or log in with a different account.
+- **Change Password:** A new "Security" section in Settings allows authenticated users to change their password. Google-only accounts see a "Password managed by Google" notice instead.
+- **Forgot & Reset Password:** Added `/forgot-password` and `/reset-password` pages with JWT-based single-use reset tokens (15-minute TTL). All sessions are invalidated on password reset.
+- **Email Domain Validation:** Passwordless login flows are protected by an email domain allowlist (Gmail, Yahoo, Outlook, Proton, etc.) and a disposable email blocklist.
+- **Full i18n:** All new authentication strings are translated across all four languages (English, Hindi, Tamil, Bengali).
 
 ## 🌟 Core Architecture (v1.0 Base)
 
