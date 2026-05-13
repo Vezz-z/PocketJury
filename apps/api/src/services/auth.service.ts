@@ -1014,15 +1014,10 @@ export class AuthService {
 
   async cancelOtpSession(email: string): Promise<void> {
     const emailHash = hashForLookup(email);
-    const mfaKey = this.getOtpRedisKey(emailHash, "mfa");
-    const otpKey = this.getOtpRedisKey(emailHash, "otp_login");
+    const otpKey = this.getOtpRedisKey(emailHash);
 
-    // Delete both possible OTP keys
-    await redis.del(mfaKey);
+    // Delete OTP key and attempt counter
     await redis.del(otpKey);
-
-    // Also clear attempt counters
-    await redis.del(`${mfaKey}:attempts`);
     await redis.del(`${otpKey}:attempts`);
 
     logger.info({ emailHash }, "OTP session cancelled (email edit)");
