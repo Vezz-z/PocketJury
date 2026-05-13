@@ -30,6 +30,8 @@ PocketJury has been built from the ground up as an offline-capable, highly secur
 - **Email Domain Validation:** Passwordless login flows are protected by an email domain allowlist (Gmail, Yahoo, Outlook, Proton, etc.) and a disposable email blocklist.
 - **Full i18n:** All new authentication strings are translated across all four languages (English, Hindi, Tamil, Bengali).
 
+---
+
 ## 🌟 Core Architecture (v1.0 Base)
 
 ### 1. The RAG-Forced AI Legal Engine
