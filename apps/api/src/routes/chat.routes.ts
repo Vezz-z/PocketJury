@@ -12,42 +12,7 @@ import { validate } from "../middleware/validate";
 
 const router = Router();
 
-const sendGuestMessageSchema = z.object({
-  content: z.string().min(1).max(2000),
-  chatHistory: z.array(z.object({
-    role: z.enum(["user", "assistant"]),
-    content: z.string()
-  })).optional().default([]),
-  languageCode: z.enum(["en", "hi", "ta", "bn"]).optional().default("en")
-});
-
-// POST /api/v1/chats/guest/stream (SSE)
-router.post(
-  "/guest/stream",
-  queryLimiter,
-  validate(sendGuestMessageSchema),
-  async (req: Request, res: Response, next: NextFunction) => {
-    try {
-      const { stream } = await chatService.sendGuestMessageStream(req.body);
-
-      res.setHeader("Content-Type", "text/event-stream");
-      res.setHeader("Cache-Control", "no-cache");
-      res.setHeader("Connection", "keep-alive");
-      res.setHeader("X-Accel-Buffering", "no");
-      res.flushHeaders();
-
-      stream.pipe(res);
-
-      req.on("close", () => {
-        stream.destroy();
-      });
-    } catch (err) {
-      next(err);
-    }
-  }
-);
-
-// All other chat routes require authentication
+// All chat routes require authentication
 router.use(authMiddleware);
 
 const createChatSchema = z.object({

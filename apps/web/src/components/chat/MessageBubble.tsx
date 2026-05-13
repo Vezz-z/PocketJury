@@ -57,12 +57,11 @@ interface Message {
 interface MessageBubbleProps {
   message: Message;
   isActivelyStreaming?: boolean;
-  isGuestMode?: boolean;
   onSimplify: () => void | Promise<void>;
   onFeedback: (rating: 'HELPFUL' | 'NOT_HELPFUL') => void;
 }
 
-export function MessageBubble({ message, isActivelyStreaming, isGuestMode, onSimplify, onFeedback }: MessageBubbleProps) {
+export function MessageBubble({ message, isActivelyStreaming, onSimplify, onFeedback }: MessageBubbleProps) {
   const t = useTranslations('chat');
   const isUser = message.role === 'user';
   const isError = !isUser && message.content.startsWith('⚠️');
@@ -195,8 +194,8 @@ export function MessageBubble({ message, isActivelyStreaming, isGuestMode, onSim
           </div>
         )}
 
-        {/* Actions toolbar for assistant messages — hidden during streaming, error messages, and in guest mode */}
-        {!isUser && !isActivelyStreaming && !isError && message.content && !isGuestMode && (
+        {/* Actions toolbar for assistant messages — hidden during streaming and for error messages */}
+        {!isUser && !isActivelyStreaming && !isError && message.content && (
           <div className="mt-2 flex items-center gap-1">
             {/* Copy */}
             <button

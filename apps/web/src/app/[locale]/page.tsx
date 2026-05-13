@@ -172,17 +172,6 @@ export default function HomePage() {
               {t('nav.getStarted')}
               <ChevronRight className="ml-1 h-4 w-4" />
             </Link>
-            <Link
-              href={`/${currentLocale}/try`}
-              className="text-sm w-full justify-center mt-1 inline-flex items-center gap-1 font-semibold py-2 px-4 rounded-lg transition-colors"
-              style={{
-                background: 'var(--color-primary-light)',
-                color: 'var(--color-primary)',
-                border: '1.5px solid var(--color-primary)',
-              }}
-            >
-              {t('app.hero.tryNow')}
-            </Link>
           </div>
         )}
       </header>
@@ -210,20 +199,6 @@ export default function HomePage() {
               </Link>
               <Link href={`/${currentLocale}/login`} className="btn-outline text-base px-8 py-3">
                 {t('nav.login')}
-              </Link>
-            </div>
-            <div className="mt-4 flex justify-center">
-              <Link
-                href={`/${currentLocale}/try`}
-                className="group relative inline-flex items-center gap-2 text-base font-semibold px-8 py-3 rounded-xl transition-all duration-300 hover:scale-[1.02]"
-                style={{
-                  background: 'linear-gradient(135deg, var(--color-primary-light), var(--color-secondary-light, var(--color-primary-light)))',
-                  color: 'var(--color-primary)',
-                  border: '2px solid var(--color-primary)',
-                }}
-              >
-                <span className="relative z-10">{t('app.hero.tryNow')}</span>
-                <ArrowRight className="ml-1 h-5 w-5 transition-transform group-hover:translate-x-1" />
               </Link>
             </div>
 

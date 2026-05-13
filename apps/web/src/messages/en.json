@@ -7,7 +7,6 @@
       "title": "Understand Your Legal Rights with AI-Powered Guidance",
       "subtitle": "PocketJury makes Indian law accessible to everyone — ask questions in your language, get simple answers backed by real statutes and judgments.",
       "cta": "Get Started for Free",
-      "tryNow": "Try Now — No Sign Up Needed",
       "disclaimer": "This is an informational tool, not a substitute for professional legal advice."
     },
     "features": {
@@ -1229,16 +1228,5 @@
         }
       }
     }
-  },
-  "guest": {
-    "loginCta": "Log In",
-    "signupCta": "Sign Up",
-    "sidebarLoginPrompt": "Sign up to save your conversations",
-    "sidebarDesc": "Create a free account to get AI-powered legal answers, save chats, and access all features.",
-    "headerLoginPrompt": "Create an account to unlock all features",
-    "guestChatWelcome": "Welcome! Ask any legal question to try PocketJury.",
-    "guestResponse": "Great question! To get AI-powered answers backed by Indian law, please create a free account. Your conversations will be saved and you'll get access to all features including:\n\n• **AI Legal Chat** — Ask questions in your language\n• **Legal References** — Answers backed by real statutes\n• **Multilingual Support** — English, Hindi, Tamil, Bengali\n• **Chat History** — Save and revisit conversations\n\nSign up now — it's free and takes less than a minute!",
-    "guestDisclaimer": "This is a preview. Sign up for full AI-powered legal guidance.",
-    "previewBadge": "Preview Mode"
   }
 }

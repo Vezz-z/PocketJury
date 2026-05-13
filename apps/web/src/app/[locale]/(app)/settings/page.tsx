@@ -332,12 +332,12 @@ export default function SettingsPage() {
             >
               {tAuth('changePassword')}
             </button>
-            <Link
+            <a
               href="/forgot-password"
               className="text-sm text-primary-600 dark:text-blue-400 hover:underline block text-center"
             >
               {tAuth('forgotCurrentPassword')} {tAuth('resetItHere')}
-            </Link>
+            </a>
           </div>
         )}
       </section>
