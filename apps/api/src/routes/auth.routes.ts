@@ -85,14 +85,14 @@ router.post(
       res.cookie("accessToken", result.accessToken, {
         httpOnly: true,
         secure: process.env.NODE_ENV === "production",
-        sameSite: "strict",
+        sameSite: "lax",
         maxAge: 15 * 60 * 1000, // 15 minutes
       });
 
       res.cookie("refreshToken", result.refreshToken, {
         httpOnly: true,
         secure: process.env.NODE_ENV === "production",
-        sameSite: "strict",
+        sameSite: "lax",
         maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
         path: "/api/v1/auth/refresh",
       });
@@ -133,14 +133,14 @@ router.post(
       res.cookie("accessToken", result.accessToken, {
         httpOnly: true,
         secure: process.env.NODE_ENV === "production",
-        sameSite: "strict",
+        sameSite: "lax",
         maxAge: 15 * 60 * 1000,
       });
 
       res.cookie("refreshToken", result.refreshToken, {
         httpOnly: true,
         secure: process.env.NODE_ENV === "production",
-        sameSite: "strict",
+        sameSite: "lax",
         maxAge: 7 * 24 * 60 * 60 * 1000,
         path: "/api/v1/auth/refresh",
       });
@@ -183,14 +183,14 @@ router.post(
       res.cookie("accessToken", result.accessToken, {
         httpOnly: true,
         secure: process.env.NODE_ENV === "production",
-        sameSite: "strict",
+        sameSite: "lax",
         maxAge: 15 * 60 * 1000,
       });
 
       res.cookie("refreshToken", result.refreshToken, {
         httpOnly: true,
         secure: process.env.NODE_ENV === "production",
-        sameSite: "strict",
+        sameSite: "lax",
         maxAge: 7 * 24 * 60 * 60 * 1000,
         path: "/api/v1/auth/refresh",
       });
@@ -228,14 +228,14 @@ router.post(
       res.cookie("accessToken", tokens.accessToken, {
         httpOnly: true,
         secure: process.env.NODE_ENV === "production",
-        sameSite: "strict",
+        sameSite: "lax",
         maxAge: 15 * 60 * 1000,
       });
 
       res.cookie("refreshToken", tokens.refreshToken, {
         httpOnly: true,
         secure: process.env.NODE_ENV === "production",
-        sameSite: "strict",
+        sameSite: "lax",
         maxAge: CACHE_TTL.REFRESH_TOKEN * 1000,
         path: "/api/v1/auth/refresh",
       });
@@ -267,14 +267,14 @@ router.post(
       res.cookie("accessToken", result.accessToken, {
         httpOnly: true,
         secure: process.env.NODE_ENV === "production",
-        sameSite: "strict",
+        sameSite: "lax",
         maxAge: 15 * 60 * 1000,
       });
 
       res.cookie("refreshToken", result.refreshToken, {
         httpOnly: true,
         secure: process.env.NODE_ENV === "production",
-        sameSite: "strict",
+        sameSite: "lax",
         maxAge: CACHE_TTL.REFRESH_TOKEN * 1000,
         path: "/api/v1/auth/refresh",
       });
@@ -298,14 +298,14 @@ router.post(
       res.cookie("accessToken", result.accessToken, {
         httpOnly: true,
         secure: process.env.NODE_ENV === "production",
-        sameSite: "strict",
+        sameSite: "lax",
         maxAge: 15 * 60 * 1000,
       });
 
       res.cookie("refreshToken", result.refreshToken, {
         httpOnly: true,
         secure: process.env.NODE_ENV === "production",
-        sameSite: "strict",
+        sameSite: "lax",
         maxAge: CACHE_TTL.REFRESH_TOKEN * 1000,
         path: "/api/v1/auth/refresh",
       });
@@ -353,14 +353,14 @@ router.post(
       res.cookie("accessToken", result.accessToken, {
         httpOnly: true,
         secure: process.env.NODE_ENV === "production",
-        sameSite: "strict",
+        sameSite: "lax",
         maxAge: 15 * 60 * 1000,
       });
 
       res.cookie("refreshToken", result.refreshToken, {
         httpOnly: true,
         secure: process.env.NODE_ENV === "production",
-        sameSite: "strict",
+        sameSite: "lax",
         maxAge: CACHE_TTL.REFRESH_TOKEN * 1000,
         path: "/api/v1/auth/refresh",
       });
@@ -409,14 +409,14 @@ router.get(
       res.cookie("accessToken", result.accessToken, {
         httpOnly: true,
         secure: process.env.NODE_ENV === "production",
-        sameSite: "strict",
+        sameSite: "lax",
         maxAge: 15 * 60 * 1000,
       });
 
       res.cookie("refreshToken", result.refreshToken, {
         httpOnly: true,
         secure: process.env.NODE_ENV === "production",
-        sameSite: "strict",
+        sameSite: "lax",
         maxAge: CACHE_TTL.REFRESH_TOKEN * 1000,
         path: "/api/v1/auth/refresh",
       });
