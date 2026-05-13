@@ -169,6 +169,13 @@ export const chatApi = {
   simplify: (chatId: string, messageId: string) =>
     fetchWithAuth(`/chats/${chatId}/messages/${messageId}/simplify`, { method: 'POST', timeout: 120000 }).then((r) => r.json()),
 
+  /**
+   * Stream the simplified response via SSE. Returns the raw Response so the
+   * caller can read the body as a ReadableStream.
+   */
+  simplifyStream: (chatId: string, messageId: string) =>
+    fetchWithAuth(`/chats/${chatId}/messages/${messageId}/simplify`, { method: 'POST', timeout: 120000 }),
+
   getReferences: (chatId: string, messageId: string) =>
     fetchWithAuth(`/chats/${chatId}/messages/${messageId}/references`, { method: 'POST' }).then((r) => r.json()),
 
