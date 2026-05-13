@@ -139,7 +139,7 @@ model Profile {
   id                String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   userId            String          @unique @map("user_id") @db.Uuid
   fullName          String          @map("full_name")
-  dateOfBirth       String          @map("date_of_birth")
+  dateOfBirth       String?         @map("date_of_birth")
   contactPhone      String?         @map("contact_phone")
   professionType    ProfessionType? @map("profession_type")
   fieldOfStudy      String?         @map("field_of_study")

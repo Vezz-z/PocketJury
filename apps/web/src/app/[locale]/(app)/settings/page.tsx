@@ -160,7 +160,7 @@ export default function SettingsPage() {
           <div>
             <span className="block text-xs text-muted mb-1 flex items-center gap-1"><Calendar className="h-3 w-3" /> {tAuth('dateOfBirth')}</span>
             <span className="text-sm font-medium text-heading">
-              {user?.profile?.dateOfBirth ? new Date(user.profile.dateOfBirth).toLocaleDateString() : '-'}
+              {user?.profile?.dateOfBirth && !isNaN(new Date(user.profile.dateOfBirth).getTime()) ? new Date(user.profile.dateOfBirth).toLocaleDateString() : '-'}
             </span>
           </div>
           <div>
@@ -332,12 +332,12 @@ export default function SettingsPage() {
             >
               {tAuth('changePassword')}
             </button>
-            <a
+            <Link
               href="/forgot-password"
               className="text-sm text-primary-600 dark:text-blue-400 hover:underline block text-center"
             >
               {tAuth('forgotCurrentPassword')} {tAuth('resetItHere')}
-            </a>
+            </Link>
           </div>
         )}
       </section>

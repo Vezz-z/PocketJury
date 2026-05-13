@@ -38,7 +38,25 @@ export default function AppLayout({ children }: { children: ReactNode }) {
         const user = useAuthStore.getState().user;
         const currentPath = window.location.pathname;
         if (user && !user.profile?.profileCompleted && !currentPath.includes('/onboarding')) {
-           router.push('/onboarding');
+          // Check if user permanently dismissed onboarding
+          const permanentDismiss = localStorage.getItem(`onboarding-dismiss-permanent-${user.id}`);
+          if (permanentDismiss === 'true') {
+            setIsChecking(false);
+            return;
+          }
+          // Check if user skipped within the last 7 days
+          const skippedAt = localStorage.getItem(`onboarding-skipped-${user.id}`);
+          if (skippedAt) {
+            const elapsed = Date.now() - parseInt(skippedAt, 10);
+            const ONE_WEEK_MS = 7 * 24 * 60 * 60 * 1000;
+            if (elapsed < ONE_WEEK_MS) {
+              setIsChecking(false);
+              return;
+            }
+            // 1 week elapsed — remove stale skip and redirect
+            localStorage.removeItem(`onboarding-skipped-${user.id}`);
+          }
+          router.push('/onboarding');
         }
       })
       .catch(() => {

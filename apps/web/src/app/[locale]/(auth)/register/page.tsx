@@ -11,7 +11,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { motion } from 'framer-motion';
-import { Scale, Mail, Lock, Eye, EyeOff, AlertCircle, Check, User, Calendar } from 'lucide-react';
+import { Scale, Mail, Lock, Eye, EyeOff, AlertCircle, Check, User } from 'lucide-react';
 import { useAuthStore } from '@/store';
 import { toast } from 'sonner';
 import { ThemeToggle } from '@/components/ui/ThemeToggle';
@@ -21,7 +21,6 @@ import { GoogleSignInButton } from '@/components/ui/GoogleSignInButton';
 const registerSchema = z
   .object({
     fullName: z.string().min(2, 'Name must be at least 2 characters').max(100),
-    dateOfBirth: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Format: YYYY-MM-DD'),
     email: z.string().email('Invalid email address'),
     password: z
       .string()
@@ -71,10 +70,11 @@ export default function RegisterPage() {
   const [resendTimer, setResendTimer] = useState(0);
 
   useEffect(() => {
-    if (isAuthenticated && user) {
+    // Only show session modal if already authenticated AND not in the middle of registration
+    if (isAuthenticated && user && !verificationRequired) {
       setShowSessionModal(true);
     }
-  }, [isAuthenticated, user]);
+  }, [isAuthenticated, user, verificationRequired]);
 
   const {
     register,
@@ -99,7 +99,7 @@ export default function RegisterPage() {
   const onSubmit = async (data: RegisterForm) => {
     try {
       setUserEmail(data.email);
-      await registerFn(data.email, data.password, data.fullName, data.dateOfBirth);
+      await registerFn(data.email, data.password, data.fullName);
       // Always show verification — the backend sends a code on register
       setVerificationRequired(true);
       setResendTimer(30);
@@ -281,27 +281,6 @@ export default function RegisterPage() {
               )}
             </div>
 
-            {/* Date of Birth */}
-            <div>
-              <label htmlFor="dateOfBirth" className="block text-sm font-medium text-heading mb-1">
-                {t('dateOfBirth')}
-              </label>
-              <div className="relative">
-                <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted" />
-                <input
-                  id="dateOfBirth"
-                  type="date"
-                  className="input pl-10"
-                  {...register('dateOfBirth')}
-                />
-              </div>
-              {errors.dateOfBirth && (
-                <p className="mt-1 text-xs text-red-600 dark:text-red-400 flex items-center gap-1">
-                  <AlertCircle className="h-3 w-3" />
-                  {errors.dateOfBirth.message}
-                </p>
-              )}
-            </div>
 
             {/* Email */}
             <div>

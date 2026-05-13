@@ -107,41 +107,17 @@ export function GoogleSignInButton({
       }
 
       setIsProcessing(true);
-      const doAuth = async (credential: string, accessToken?: string) => {
-        try {
-          await googleAuth(credential, accessToken);
-          toast.success(t('loginSuccess'));
-          router.push(redirectTo);
-        } catch {
-          toast.error(t('googleAuthError'));
-        } finally {
-          setIsProcessing(false);
-        }
-      };
-
-      if (mode === 'signup' && window.google?.accounts?.oauth2) {
-        try {
-          const tokenClient = window.google.accounts.oauth2.initTokenClient({
-            client_id: GOOGLE_CLIENT_ID!,
-            scope: 'https://www.googleapis.com/auth/user.birthday.read',
-            callback: (tokenResponse) => {
-              if (tokenResponse.error) {
-                doAuth(response.credential);
-              } else {
-                doAuth(response.credential, tokenResponse.access_token);
-              }
-            },
-          });
-          tokenClient.requestAccessToken();
-        } catch (err) {
-          console.error("Failed to init token client", err);
-          doAuth(response.credential);
-        }
-      } else {
-        doAuth(response.credential);
+      try {
+        await googleAuth(response.credential);
+        toast.success(t('loginSuccess'));
+        router.push(redirectTo);
+      } catch {
+        toast.error(t('googleAuthError'));
+      } finally {
+        setIsProcessing(false);
       }
     },
-    [googleAuth, router, redirectTo, t, mode],
+    [googleAuth, router, redirectTo, t],
   );
 
   // Load and initialize the Google Identity Services script

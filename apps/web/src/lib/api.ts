@@ -67,7 +67,7 @@ async function fetchWithAuth(url: string, options: FetchOptions = {}, _isRetry =
 
 // ----- Auth -----
 export const authApi = {
-  register: (data: { email: string; password: string; fullName: string; dateOfBirth: string; preferredLanguage?: string }) =>
+  register: (data: { email: string; password: string; fullName: string; dateOfBirth?: string; preferredLanguage?: string }) =>
     fetchWithAuth('/auth/register', { method: 'POST', body: JSON.stringify(data) }).then((r) => r.json()),
 
   login: (data: { email: string; password: string }) =>

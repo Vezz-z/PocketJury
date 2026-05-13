@@ -523,6 +523,61 @@ export class ChatService {
       citedSections: (metadata?.citedSections as unknown[]) || [],
     };
   }
+
+  /**
+   * Guest streaming message send — bypasses database, proxies SSE directly.
+   */
+  async sendGuestMessageStream(input: {
+    content: string;
+    chatHistory: Array<{ role: string; content: string }>;
+    languageCode: string;
+  }): Promise<{ stream: Readable }> {
+    // Sanitize input
+    const sanitizedContent = input.content
+      .replace(/<[^>]*>/g, "")
+      .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, "")
+      .trim();
+
+    if (!sanitizedContent || sanitizedContent.length > 2000) {
+      throw createError("Message must be between 1 and 2000 characters", 400);
+    }
+
+    // Get the raw SSE stream from FastAPI using dummy IDs and RURAL_USER persona
+    const aiResponse = await aiService.queryStream({
+      query: sanitizedContent,
+      userId: "guest",
+      chatId: "guest",
+      personaMode: "RURAL_USER",
+      languageCode: input.languageCode,
+      chatHistory: input.chatHistory,
+    });
+
+    if (!aiResponse.body) {
+      throw createError("AI service returned empty stream", 503);
+    }
+
+    const { PassThrough } = await import("node:stream");
+    const passthrough = new PassThrough();
+    const reader = aiResponse.body.getReader();
+    const decoder = new TextDecoder();
+
+    (async () => {
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          const text = decoder.decode(value, { stream: true });
+          passthrough.write(text);
+        }
+      } catch (err) {
+        logger.error({ err }, "Error reading guest AI stream");
+      } finally {
+        passthrough.end();
+      }
+    })();
+
+    return { stream: passthrough as Readable };
+  }
 }
 
 export const chatService = new ChatService();

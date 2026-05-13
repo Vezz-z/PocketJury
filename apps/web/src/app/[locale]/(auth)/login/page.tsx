@@ -469,7 +469,7 @@ export default function LoginPage() {
               {t('legalSourcesLink')}
             </Link>
             <a href="mailto:pocketjuryai@gmail.com" className="hover:text-primary-600 dark:hover:text-blue-400 underline transition-colors">
-              Contact Us
+              {t('common.contactUs') || 'Contact Us'}
             </a>
           </div>
         </div>

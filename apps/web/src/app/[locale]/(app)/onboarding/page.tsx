@@ -19,6 +19,7 @@ import {
   ChevronRight,
   ChevronLeft,
   Check,
+  Calendar,
 } from 'lucide-react';
 import { LocationSelect } from '@/components/ui/LocationSelect';
 
@@ -59,6 +60,7 @@ export default function OnboardingPage() {
     language: 'en',
     persona: 'GENERAL',
     fullName: '',
+    dateOfBirth: '',
     state: '',
     district: '',
     professionType: '',
@@ -129,6 +131,7 @@ export default function OnboardingPage() {
       if (form.fullName || form.state || form.professionType) {
         await updateProfile({
           fullName: form.fullName,
+          dateOfBirth: form.dateOfBirth && !isNaN(new Date(form.dateOfBirth).getTime()) ? new Date(form.dateOfBirth).toISOString() : undefined,
           locationState: form.state,
           locationDistrict: form.district,
           professionType: form.professionType,
@@ -138,6 +141,11 @@ export default function OnboardingPage() {
               form.professionType === 'SELF_EMPLOYED' ? form.businessSector :
                 form.professionType === 'UNEMPLOYED' ? form.highestQualification : undefined,
         });
+      }
+      // Clear any skip/dismiss flags since user completed onboarding
+      if (user?.id) {
+        localStorage.removeItem(`onboarding-skipped-${user.id}`);
+        localStorage.removeItem(`onboarding-dismiss-permanent-${user.id}`);
       }
       setShowConsent(false);
       sessionStorage.removeItem('onboardingState');
@@ -258,6 +266,20 @@ export default function OnboardingPage() {
                       value={form.fullName}
                       onChange={(e) => setForm({ ...form, fullName: e.target.value })}
                     />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-body mb-1">
+                      {t('dateOfBirth')}
+                    </label>
+                    <div className="relative">
+                      <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted" />
+                      <input
+                        type="date"
+                        className="input pl-10"
+                        value={form.dateOfBirth}
+                        onChange={(e) => setForm({ ...form, dateOfBirth: e.target.value })}
+                      />
+                    </div>
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <LocationSelect
@@ -431,17 +453,37 @@ export default function OnboardingPage() {
 
         {/* Skip */}
         {step < 3 && (
-          <p className="mt-4 text-center">
+          <div className="mt-4 flex items-center justify-center gap-4">
             <button
               className="text-xs text-muted hover:text-body"
               onClick={() => {
+                // Save skip timestamp for 1-week cooldown
+                if (user?.id) {
+                  localStorage.setItem(`onboarding-skipped-${user.id}`, Date.now().toString());
+                }
                 setShowConsent(false);
+                sessionStorage.removeItem('onboardingState');
                 router.push('/chat');
               }}
             >
               {t('skipForNow')}
             </button>
-          </p>
+            <span className="text-xs text-muted">|</span>
+            <button
+              className="text-xs text-muted hover:text-body"
+              onClick={() => {
+                // Permanently dismiss onboarding for this account
+                if (user?.id) {
+                  localStorage.setItem(`onboarding-dismiss-permanent-${user.id}`, 'true');
+                }
+                setShowConsent(false);
+                sessionStorage.removeItem('onboardingState');
+                router.push('/chat');
+              }}
+            >
+              {t('dontShowAgain')}
+            </button>
+          </div>
         )}
       </div>
     </div>

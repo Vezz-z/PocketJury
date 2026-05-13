@@ -57,7 +57,7 @@ interface AuthState {
   error: string | null;
 
   login: (email: string, password: string) => Promise<any>;
-  register: (email: string, password: string, fullName: string, dateOfBirth: string, preferredLanguage?: string) => Promise<any>;
+  register: (email: string, password: string, fullName: string, preferredLanguage?: string) => Promise<any>;
   verifyEmail: (email: string, code: string) => Promise<void>;
   verifyMfa: (email: string, code: string) => Promise<void>;
   googleAuth: (token: string, accessToken?: string) => Promise<void>;
@@ -95,15 +95,12 @@ export const useAuthStore = create<AuthState>()(
         }
       },
 
-      register: async (email, password, fullName, dateOfBirth, preferredLanguage) => {
+      register: async (email, password, fullName, preferredLanguage) => {
         set({ isLoading: true, error: null });
         try {
-          const data = await authApi.register({ email, password, fullName, dateOfBirth, preferredLanguage });
-          if (data.mfaRequired) {
-             set({ isLoading: false });
-             return data;
-          }
-          set({ user: data.user, isAuthenticated: true, isLoading: false });
+          const data = await authApi.register({ email, password, fullName, preferredLanguage });
+          // Don't set isAuthenticated here — user must verify email first
+          set({ isLoading: false });
           return data;
         } catch (err: unknown) {
           let message = 'Registration failed';

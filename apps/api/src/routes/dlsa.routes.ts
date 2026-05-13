@@ -9,7 +9,6 @@ import { authMiddleware } from "../middleware/auth";
 import { validate } from "../middleware/validate";
 
 const router = Router();
-router.use(authMiddleware);
 
 const searchSchema = z.object({
   state: z.string().optional(),

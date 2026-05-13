@@ -20,6 +20,17 @@ interface UpdateProfileInput {
 }
 
 export class UserService {
+  private safeDecrypt(value: string | null | undefined): string | null {
+    if (value == null) return null;
+    try {
+      const result = decrypt(value);
+      return result || null; // Return null for empty strings
+    } catch {
+      // Backward compatibility for legacy plaintext rows or data encrypted with a different key.
+      return value || null;
+    }
+  }
+
   async getProfile(userId: string) {
     const user = await prisma.user.findUnique({
       where: { id: userId },
@@ -30,15 +41,15 @@ export class UserService {
 
     return {
       id: user.id,
-      email: decrypt(user.email),
+      email: this.safeDecrypt(user.email),
       preferredLanguage: user.preferredLanguage,
       role: user.role,
       isVerified: user.isVerified,
       profile: user.profile
         ? {
-          fullName: decrypt(user.profile.fullName),
-          dateOfBirth: user.profile.dateOfBirth ? decrypt(user.profile.dateOfBirth) : null,
-          contactPhone: user.profile.contactPhone ? decrypt(user.profile.contactPhone) : null,
+          fullName: this.safeDecrypt(user.profile.fullName),
+          dateOfBirth: this.safeDecrypt(user.profile.dateOfBirth),
+          contactPhone: this.safeDecrypt(user.profile.contactPhone),
           professionType: user.profile.professionType,
           fieldOfStudy: user.profile.fieldOfStudy,
           yearOfPassing: user.profile.yearOfPassing,
@@ -133,14 +144,14 @@ export class UserService {
 
     return {
       user: {
-        email: decrypt(user.email),
+        email: this.safeDecrypt(user.email),
         preferredLanguage: user.preferredLanguage,
         createdAt: user.createdAt,
       },
       profile: user.profile
         ? {
-          fullName: decrypt(user.profile.fullName),
-          dateOfBirth: user.profile.dateOfBirth ? decrypt(user.profile.dateOfBirth) : null,
+          fullName: this.safeDecrypt(user.profile.fullName),
+          dateOfBirth: this.safeDecrypt(user.profile.dateOfBirth),
           professionType: user.profile.professionType,
           fieldOfStudy: user.profile.fieldOfStudy,
           currentProfession: user.profile.currentProfession,

@@ -33,13 +33,15 @@ app.use(helmet({
   contentSecurityPolicy: {
     directives: {
       defaultSrc: ["'self'"],
-      scriptSrc: ["'self'"],
-      styleSrc: ["'self'", "'unsafe-inline'"],
-      imgSrc: ["'self'", "data:"],
+      scriptSrc: ["'self'", "https://accounts.google.com", "https://apis.google.com"],
+      styleSrc: ["'self'", "'unsafe-inline'", "https://accounts.google.com"],
+      imgSrc: ["'self'", "data:", "https://lh3.googleusercontent.com"],
       fontSrc: ["'self'", "https://fonts.gstatic.com"],
-      connectSrc: ["'self'", "https://accounts.google.com"],
+      connectSrc: ["'self'", "https://accounts.google.com", "https://oauth2.googleapis.com"],
+      frameSrc: ["https://accounts.google.com"],
     },
   },
+  crossOriginOpenerPolicy: false, // Let Next.js set COOP to same-origin-allow-popups for Google OAuth
   hsts: { maxAge: 31536000, includeSubDomains: true },
   referrerPolicy: { policy: "strict-origin-when-cross-origin" },
 }));

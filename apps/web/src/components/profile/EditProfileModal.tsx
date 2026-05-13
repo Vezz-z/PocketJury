@@ -15,6 +15,13 @@ interface EditProfileModalProps {
 
 const PROFESSIONS = ['STUDENT', 'EMPLOYED', 'UNEMPLOYED', 'SELF_EMPLOYED'] as const;
 
+/** Safely parse a date string — returns YYYY-MM-DD or '' */
+function safeDateStr(val: string | null | undefined): string {
+    if (!val) return '';
+    const d = new Date(val);
+    return isNaN(d.getTime()) ? '' : d.toISOString().split('T')[0];
+}
+
 export function EditProfileModal({ isOpen, onClose }: EditProfileModalProps) {
     const t = useTranslations('settings'); // or a new 'profile' namespace later
     const tCommon = useTranslations('common');
@@ -43,7 +50,7 @@ export function EditProfileModal({ isOpen, onClose }: EditProfileModalProps) {
             setForm({
                 fullName: user.profile?.fullName || '',
                 email: user.email || '',
-                dateOfBirth: user.profile?.dateOfBirth ? new Date(user.profile.dateOfBirth).toISOString().split('T')[0] : '',
+                dateOfBirth: safeDateStr(user.profile?.dateOfBirth),
                 locationState: user?.profile?.locationState || '',
                 locationDistrict: user?.profile?.locationDistrict || '',
                 professionType: user?.profile?.professionType || '',
@@ -56,7 +63,7 @@ export function EditProfileModal({ isOpen, onClose }: EditProfileModalProps) {
     if (!isOpen) return null;
 
     const hasUnsavedChanges = () => {
-        const originalDob = user?.profile?.dateOfBirth ? new Date(user.profile.dateOfBirth).toISOString().split('T')[0] : '';
+        const originalDob = safeDateStr(user?.profile?.dateOfBirth);
         return (
             form.fullName !== (user?.profile?.fullName || '') ||
             form.email !== (user?.email || '') ||
@@ -92,7 +99,7 @@ export function EditProfileModal({ isOpen, onClose }: EditProfileModalProps) {
             await updateProfile({
                 fullName: form.fullName || undefined,
                 email: form.email || undefined,
-                dateOfBirth: form.dateOfBirth ? new Date(form.dateOfBirth).toISOString() : undefined,
+                dateOfBirth: form.dateOfBirth && !isNaN(new Date(form.dateOfBirth).getTime()) ? new Date(form.dateOfBirth).toISOString() : undefined,
                 locationState: form.locationState || undefined,
                 locationDistrict: form.locationDistrict || undefined,
                 professionType: form.professionType || undefined,

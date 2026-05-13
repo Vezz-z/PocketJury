@@ -21,7 +21,7 @@ interface RegisterInput {
   email: string;
   password: string;
   fullName: string;
-  dateOfBirth: string;
+  dateOfBirth?: string;
   contactPhone?: string;
   preferredLanguage: string;
 }
@@ -136,7 +136,7 @@ export class AuthService {
     const passwordHash = await hashPassword(input.password);
     const encryptedEmail = encrypt(input.email.toLowerCase().trim());
     const encryptedName = encrypt(input.fullName);
-    const encryptedDob = encrypt(input.dateOfBirth);
+    const encryptedDob = input.dateOfBirth ? encrypt(input.dateOfBirth) : null;
     const encryptedPhone = input.contactPhone ? encrypt(input.contactPhone) : null;
 
     const verificationCode = this.generateCode();
@@ -201,7 +201,7 @@ export class AuthService {
         profile: user.profile
           ? {
             fullName: input.fullName,
-            dateOfBirth: input.dateOfBirth,
+            dateOfBirth: input.dateOfBirth || null,
             personaMode: user.profile.personaMode,
             profileCompleted: user.profile.profileCompleted,
           }
@@ -308,7 +308,6 @@ export class AuthService {
 
   async googleAuth(googleId: string, email: string, name: string, googleAccessToken?: string): Promise<AuthResult> {
     const emailHash = hashForLookup(email);
-    const googleDateOfBirth = await this.fetchGoogleDateOfBirth(googleAccessToken);
     let user = await prisma.user.findUnique({
       where: { googleId },
       include: { profile: true },
@@ -336,7 +335,6 @@ export class AuthService {
             profile: {
               create: {
                 fullName: encrypt(name),
-                dateOfBirth: encrypt(googleDateOfBirth || ""),
               },
             },
             consents: {
@@ -352,20 +350,18 @@ export class AuthService {
       }
     }
 
+    if (!user) {
+      throw createError("Failed to create or find Google user", 500);
+    }
+
     if (user.profile) {
-      const profileUpdateData: { fullName: string; dateOfBirth?: string } = {
-        fullName: encrypt(name),
-      };
-
-      if (googleDateOfBirth) {
-        profileUpdateData.dateOfBirth = encrypt(googleDateOfBirth);
-      }
-
       user = await prisma.user.update({
         where: { id: user.id },
         data: {
           profile: {
-            update: profileUpdateData,
+            update: {
+              fullName: encrypt(name),
+            },
           },
         },
         include: { profile: true },
@@ -389,19 +385,19 @@ export class AuthService {
 
     return {
       user: {
-        id: user.id,
+        id: user!.id,
         email,
-        authProvider: user.authProvider,
-        googleId: user.googleId,
-        role: user.role,
-        preferredLanguage: user.preferredLanguage,
-        isVerified: user.isVerified,
-        profile: user.profile
+        authProvider: user!.authProvider,
+        googleId: user!.googleId,
+        role: user!.role,
+        preferredLanguage: user!.preferredLanguage,
+        isVerified: user!.isVerified,
+        profile: user!.profile
           ? {
             fullName: name,
-            dateOfBirth: googleDateOfBirth,
-            personaMode: user.profile.personaMode,
-            profileCompleted: user.profile.profileCompleted,
+            dateOfBirth: null,
+            personaMode: user!.profile.personaMode,
+            profileCompleted: user!.profile.profileCompleted,
           }
           : null,
       },

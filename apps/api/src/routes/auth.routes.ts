@@ -27,7 +27,7 @@ const registerSchema = z.object({
   dateOfBirth: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Format: YYYY-MM-DD").refine(
     (val) => !isNaN(new Date(val).getTime()) && new Date(val) < new Date(),
     "Must be a valid date in the past"
-  ),
+  ).optional(),
   contactPhone: z.string().regex(/^\+?[0-9]{10,15}$/).optional(),
   preferredLanguage: z.enum(["en", "hi", "ta", "bn"]).default("en"),
 });
