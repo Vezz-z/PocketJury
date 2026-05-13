@@ -425,6 +425,90 @@ export class ChatService {
     return { content: newContent };
   }
 
+  /**
+   * Streaming simplify — deletes subsequent messages, then proxies the SSE
+   * stream from the AI service. After the stream ends, persists the final
+   * simplified content to the database.
+   */
+  async simplifyMessageStream(messageId: string, userId: string) {
+    const message = await prisma.message.findFirst({
+      where: { id: messageId, chat: { userId } },
+      include: { chat: true },
+    });
+
+    if (!message || message.role !== "ASSISTANT") {
+      throw createError("Message not found", 404);
+    }
+
+    // Delete all subsequent messages in this chat
+    await prisma.message.deleteMany({
+      where: {
+        chatId: message.chatId,
+        createdAt: { gt: message.createdAt },
+      },
+    });
+
+    // Get the raw SSE stream from FastAPI
+    const aiResponse = await aiService.simplifyStream({
+      originalResponse: message.content,
+      languageCode: message.chat.languageCode,
+      personaMode: "RURAL_USER",
+    });
+
+    if (!aiResponse.body) {
+      throw createError("AI service returned empty stream", 503);
+    }
+
+    // Pipe the web ReadableStream into a PassThrough so Express can pipe it
+    const { PassThrough } = await import("node:stream");
+    const passthrough = new PassThrough();
+    const collectedChunks: string[] = [];
+    const msgId = messageId;
+
+    const reader = (aiResponse.body as unknown as ReadableStream<Uint8Array>).getReader();
+    const decoder = new TextDecoder();
+
+    (async () => {
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          const text = decoder.decode(value, { stream: true });
+          collectedChunks.push(text);
+          passthrough.write(text);
+        }
+      } catch (err) {
+        logger.error({ err, messageId: msgId }, "Error reading simplify stream");
+      } finally {
+        passthrough.end();
+      }
+
+      // After stream ends, persist the simplified content to the database
+      try {
+        const fullText = collectedChunks.join("");
+        const doneMatch = fullText.match(/event: done\ndata: (.+)\n/);
+
+        if (doneMatch) {
+          const doneData = JSON.parse(doneMatch[1]);
+          const simplifiedText = doneData.simplified_text || "";
+          const newContent = `[SIMPLIFIED_MARKER]\n\n${simplifiedText}`;
+
+          await prisma.message.update({
+            where: { id: msgId },
+            data: {
+              content: newContent,
+              simplifiedContent: null,
+            },
+          });
+        }
+      } catch (err) {
+        logger.error({ err, messageId: msgId }, "Failed to save simplified content");
+      }
+    })();
+
+    return { stream: passthrough as Readable };
+  }
+
   async getMessageReferences(messageId: string, userId: string) {
     const message = await prisma.message.findFirst({
       where: { id: messageId, chat: { userId } },

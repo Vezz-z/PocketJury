@@ -90,7 +90,7 @@ export default function ChatConversationPage() {
   useEffect(() => {
     if (isSending && !prevSending.current) {
       userScrolledUpRef.current = false;
-      setShowScrollBtn(false);
+      setShowScrollBtn(true);
       requestAnimationFrame(() => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }));
     }
     prevSending.current = isSending;

@@ -549,6 +549,41 @@ export const useChatStore = create<ChatState>()((set, get) => ({
       const isStillOnThisChat = get().activeChat?.id === chatId;
       if (isStillOnThisChat) {
         set((state) => ({ isSending: false, isStreaming: false, streamingMessageId: null, streamingChatIds: state.streamingChatIds.filter((id) => id !== chatId) }));
+
+        // Re-fetch the chat from the server to replace temporary message IDs
+        // (streaming-*) with real database UUIDs. Without this, operations like
+        // "Simplify" fail because the backend can't find the temp ID in the DB.
+        try {
+          const data = await chatApi.get(chatId);
+          const serverMessages = (data.messages || []).map((m: Record<string, unknown>) => ({
+            ...m,
+            role: typeof m.role === 'string' ? m.role.toLowerCase() : m.role,
+          }));
+
+          // Preserve client-only fields (processingTimeMs, confidenceScore) that
+          // the DB doesn't store — merge them from the current activeChat messages.
+          const currentMessages = get().activeChat?.messages || [];
+          const mergedMessages = serverMessages.map((sm: Message, idx: number) => {
+            // Match by position: the last messages align between client & server
+            const clientMsg = currentMessages[idx];
+            if (clientMsg && sm.role === clientMsg.role) {
+              return {
+                ...sm,
+                processingTimeMs: sm.processingTimeMs ?? clientMsg.processingTimeMs,
+                confidenceScore: sm.confidenceScore ?? clientMsg.confidenceScore,
+              };
+            }
+            return sm;
+          });
+
+          set((state) => ({
+            activeChat: state.activeChat?.id === chatId
+              ? { ...state.activeChat, messages: mergedMessages }
+              : state.activeChat,
+          }));
+        } catch {
+          // Non-critical: simplify may fail later, but the chat still works
+        }
       } else {
         // Stream finished in the background — mark unread + dispatch event for toast
         set((state) => ({
@@ -646,30 +681,108 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     const targetIndex = activeChat.messages.findIndex((m) => m.id === messageId);
     if (targetIndex === -1) return;
 
-    // Optimistically truncate: remove the target message and everything below
+    // Keep everything before the target message, then add a streaming placeholder
     const truncatedMessages = activeChat.messages.slice(0, targetIndex);
+    const simplifyStreamId = `simplify-${Date.now()}`;
+    const streamingPlaceholder: Message = {
+      id: simplifyStreamId,
+      role: 'assistant',
+      content: '',
+      createdAt: new Date().toISOString(),
+    };
 
     set({
       isSimplifyingMessageId: messageId,
-      activeChat: { ...activeChat, messages: truncatedMessages },
+      isStreaming: true,
+      streamingMessageId: simplifyStreamId,
+      activeChat: { ...activeChat, messages: [...truncatedMessages, streamingPlaceholder] },
     });
 
     try {
-      // Call the simplify API (backend replaces content + deletes subsequent messages)
-      await chatApi.simplify(chatId, messageId);
+      // Start SSE stream for simplification
+      const response = await chatApi.simplifyStream(chatId, messageId);
 
-      // Re-fetch the full chat to get the server-authoritative state
-      const data = await chatApi.get(chatId);
-      const normalizedMessages = (data.messages || []).map((m: Record<string, unknown>) => ({
-        ...m,
-        role: typeof m.role === 'string' ? m.role.toLowerCase() : m.role,
-      }));
+      if (!response.body) {
+        throw new Error('No response body for simplify streaming');
+      }
 
-      set((state) => ({
-        activeChat: state.activeChat
-          ? { ...state.activeChat, messages: normalizedMessages }
-          : state.activeChat,
-      }));
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      let accumulatedContent = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            const dataStr = line.slice(6);
+            // Determine the event type from the preceding "event:" line
+            // SSE format: "event: <type>\ndata: <json>\n\n"
+            // We parse by checking the previous accumulated event type
+            let parsed: Record<string, unknown>;
+            try {
+              parsed = JSON.parse(dataStr);
+            } catch {
+              continue;
+            }
+
+            if ('text' in parsed) {
+              // token event
+              accumulatedContent += parsed.text as string;
+              set((state) => ({
+                isSimplifyingMessageId: null, // Clear "Simplifying" bubble as soon as streaming starts
+                activeChat: state.activeChat?.id === chatId
+                  ? {
+                    ...state.activeChat,
+                    messages: (state.activeChat.messages || []).map((m) =>
+                      m.id === simplifyStreamId
+                        ? { ...m, content: accumulatedContent }
+                        : m,
+                    ),
+                  }
+                  : state.activeChat,
+              }));
+            } else if ('simplified_text' in parsed) {
+              // done event — swap in the final translated text
+              const finalText = parsed.simplified_text as string;
+              set((state) => ({
+                activeChat: state.activeChat?.id === chatId
+                  ? {
+                    ...state.activeChat,
+                    messages: (state.activeChat.messages || []).map((m) =>
+                      m.id === simplifyStreamId
+                        ? { ...m, content: `[SIMPLIFIED_MARKER]\n\n${finalText}` }
+                        : m,
+                    ),
+                  }
+                  : state.activeChat,
+              }));
+            }
+          }
+        }
+      }
+
+      // Re-fetch the full chat to get real DB IDs and authoritative state
+      try {
+        const data = await chatApi.get(chatId);
+        const normalizedMessages = (data.messages || []).map((m: Record<string, unknown>) => ({
+          ...m,
+          role: typeof m.role === 'string' ? m.role.toLowerCase() : m.role,
+        }));
+        set((state) => ({
+          activeChat: state.activeChat?.id === chatId
+            ? { ...state.activeChat, messages: normalizedMessages }
+            : state.activeChat,
+        }));
+      } catch {
+        // Non-critical — the streamed content is already visible
+      }
     } catch (error) {
       console.error('Failed to simplify message:', error);
       // Restore original messages on failure
@@ -679,7 +792,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
           : state.activeChat,
       }));
     } finally {
-      set({ isSimplifyingMessageId: null });
+      set({ isSimplifyingMessageId: null, isStreaming: false, streamingMessageId: null });
     }
   },
 

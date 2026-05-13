@@ -159,6 +159,63 @@ async def simplify_text(request: Request, body: SimplifyRequest) -> SimplifyResp
     return SimplifyResponse(simplified_text=simplified, language=body.language)
 
 
+@router.post("/simplify/stream")
+async def simplify_text_stream(request: Request, body: SimplifyRequest) -> StreamingResponse:
+    """Simplify a legal response and stream the result via SSE.
+
+    SSE event types:
+    - ``token``: individual LLM text chunks
+    - ``done``:  final simplified text (translated if needed)
+    - ``error``: processing error
+    """
+    import json as _json
+    SIMPLIFY_COUNT.inc()
+
+    llm_client = request.app.state.llm_client
+    translator = request.app.state.translator
+
+    persona_map = {
+        "STUDENT": "a 16-year-old student",
+        "SENIOR_CITIZEN": "an elderly person with basic education",
+        "RURAL_USER": "a person from a rural village with limited formal education",
+        "GENERAL": "a common person without legal training",
+        "PROFESSIONAL": "a working professional unfamiliar with law",
+    }
+    audience = persona_map.get(body.persona.value, "a common person")
+    prompt = SIMPLIFY_PROMPT.format(audience=audience, text=body.text)
+
+    async def event_generator():
+        accumulated = ""
+        try:
+            async for token in llm_client.generate_stream(prompt, max_tokens=2048):
+                accumulated += token
+                yield f"event: token\ndata: {_json.dumps({'text': token})}\n\n"
+
+            # Translate the full result if needed
+            final_text = accumulated
+            if body.language != "en":
+                final_text = await translator.translate(
+                    text=accumulated,
+                    source_lang="en",
+                    target_lang=body.language.value,
+                )
+
+            yield f"event: done\ndata: {_json.dumps({'simplified_text': final_text})}\n\n"
+        except Exception as e:
+            logger.error("Simplify stream error", error=str(e), exc_info=True)
+            yield f"event: error\ndata: {_json.dumps({'message': 'Failed to simplify'})}\n\n"
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+
 @router.post("/generate-title")
 async def generate_title(request: Request, body: dict) -> dict:
     """Generate a short, descriptive title for a legal conversation."""

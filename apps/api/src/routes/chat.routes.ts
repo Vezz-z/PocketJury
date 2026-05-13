@@ -167,6 +167,34 @@ router.post(
   }
 );
 
+// POST /api/v1/chats/:chatId/messages/:messageId/simplify/stream (SSE)
+router.post(
+  "/:chatId/messages/:messageId/simplify/stream",
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { stream } = await chatService.simplifyMessageStream(
+        req.params.messageId as string,
+        req.user!.sub,
+      );
+
+      // Set SSE headers
+      res.setHeader("Content-Type", "text/event-stream");
+      res.setHeader("Cache-Control", "no-cache");
+      res.setHeader("Connection", "keep-alive");
+      res.setHeader("X-Accel-Buffering", "no");
+      res.flushHeaders();
+
+      stream.pipe(res);
+
+      req.on("close", () => {
+        stream.destroy();
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
+);
+
 // POST /api/v1/chats/:chatId/messages/:messageId/references
 router.post(
   "/:chatId/messages/:messageId/references",

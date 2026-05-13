@@ -175,6 +175,40 @@ export class AIService {
     }
   }
 
+  /**
+   * Streaming simplify — returns a readable stream of SSE events from FastAPI.
+   * The caller is responsible for piping this to the client response.
+   */
+  async simplifyStream(input: SimplifyInput): Promise<Response> {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), this.timeout);
+
+    try {
+      const response = await fetch(`${this.baseUrl}/api/v1/simplify/stream`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          text: input.originalResponse,
+          language: input.languageCode,
+          persona: input.personaMode,
+        }),
+        signal: controller.signal,
+      });
+
+      if (!response.ok) {
+        const error = await response.text();
+        logger.error({ status: response.status, error }, "AI simplify stream error");
+        throw new Error(`AI simplify stream returned ${response.status}: ${error}`);
+      }
+
+      clearTimeout(timeoutId);
+      return response;
+    } catch (err) {
+      clearTimeout(timeoutId);
+      throw err;
+    }
+  }
+
   async healthCheck(): Promise<boolean> {
     try {
       const response = await fetch(`${this.baseUrl}/health`, {
