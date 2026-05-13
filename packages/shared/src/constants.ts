@@ -13,6 +13,8 @@ export const RATE_LIMITS = {
   GENERAL: { points: 100, duration: 60 },   // 100 per minute per user
   ADMIN: { points: 50, duration: 60 },      // 50 per minute per user
   FORGOT_PASSWORD: { points: 3, duration: 3600 }, // 3 per hour
+  OTP_REQUEST: { points: 5, duration: 3600 },      // 5 per hour per email
+  MAGIC_LINK_REQUEST: { points: 5, duration: 3600 }, // 5 per hour per email
 } as const;
 
 // ---- Auth ----
@@ -24,6 +26,13 @@ export const AUTH = {
   PASSWORD_MIN_LENGTH: 8,
   PASSWORD_MAX_LENGTH: 128,
   QUERY_MAX_LENGTH: 2000,
+} as const;
+
+// ---- OTP Configuration ----
+export const OTP = {
+  TTL_SECONDS: 600,       // 10 minutes
+  MAX_ATTEMPTS: 5,
+  CODE_LENGTH: 6,
 } as const;
 
 // ---- Supported Languages ----

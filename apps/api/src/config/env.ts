@@ -31,6 +31,12 @@ const envSchema = z.object({
   // Frontend
   FRONTEND_URL: z.string().url().default("http://localhost:3000"),
 
+  // Passwordless Auth
+  MAGIC_LINK_BASE_URL: z.string().url().optional(),
+  VALIDATE_MX_RECORDS: z.coerce.boolean().default(false),
+  OTP_TTL_SECONDS: z.coerce.number().default(600),
+  MAGIC_LINK_TTL_MINUTES: z.coerce.number().default(15),
+
   // Monitoring
   SENTRY_DSN: z.string().optional(),
   LOG_LEVEL: z.enum(["fatal", "error", "warn", "info", "debug", "trace"]).default("info"),

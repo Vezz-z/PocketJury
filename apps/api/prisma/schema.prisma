@@ -111,6 +111,12 @@ model User {
   preferredLanguage String       @default("en") @map("preferred_language") @db.VarChar(5)
   role              UserRole     @default(USER)
   isVerified        Boolean      @default(false) @map("is_verified")
+  verificationCode  String?      @map("verification_code")
+  verificationExpires DateTime?  @map("verification_expires") @db.Timestamptz
+  mfaEnabled        Boolean      @default(false) @map("mfa_enabled")
+  mfaSecret         String?      @map("mfa_secret")
+  passwordResetToken String?     @map("password_reset_token")
+  passwordResetExpires DateTime? @map("password_reset_expires") @db.Timestamptz
   isActive          Boolean      @default(true) @map("is_active")
   lastLoginAt       DateTime?    @map("last_login_at") @db.Timestamptz
   createdAt         DateTime     @default(now()) @map("created_at") @db.Timestamptz
