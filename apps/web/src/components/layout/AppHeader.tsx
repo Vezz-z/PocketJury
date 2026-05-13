@@ -139,23 +139,36 @@ export function AppHeader() {
           {/* Theme toggle */}
           <ThemeToggle />
 
-          {/* Settings */}
-          <Link
-            href="/settings"
-            className="p-1.5 rounded-md text-body hover:bg-elevated transition-colors"
-            aria-label={t('settings')}
-            title={`${t('settings')} (Ctrl+Shift+S)`}
-          >
-            <Settings className="h-4 w-4" />
-          </Link>
+          {useAuthStore((s) => s.isAuthenticated) ? (
+            <>
+              {/* Settings */}
+              <Link
+                href="/settings"
+                className="p-1.5 rounded-md text-body hover:bg-elevated transition-colors"
+                aria-label={t('settings')}
+                title={`${t('settings')} (Ctrl+Shift+S)`}
+              >
+                <Settings className="h-4 w-4" />
+              </Link>
 
-          <button
-            className="p-1.5 rounded-md text-body hover:bg-elevated transition-colors"
-            onClick={handleLogoutClick}
-            aria-label={t('logout')}
-          >
-            <LogOut className="h-4 w-4" />
-          </button>
+              <button
+                className="p-1.5 rounded-md text-body hover:bg-elevated transition-colors"
+                onClick={handleLogoutClick}
+                aria-label={t('logout')}
+              >
+                <LogOut className="h-4 w-4" />
+              </button>
+            </>
+          ) : (
+            <>
+              <Link href={`/${pathname.split('/')[1] || 'en'}/login`} className="btn-ghost text-xs px-2 py-1">
+                {t('login')}
+              </Link>
+              <Link href={`/${pathname.split('/')[1] || 'en'}/register`} className="btn-primary text-xs px-3 py-1">
+                {t('getStarted')}
+              </Link>
+            </>
+          )}
         </div>
       </header>
 

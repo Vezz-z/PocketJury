@@ -8,7 +8,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { useTranslations } from 'next-intl';
-import { useChatStore } from '@/store';
+import { useChatStore, useAuthStore } from '@/store';
 import { MessageInput } from '@/components/chat/MessageInput';
 import { DisclaimerBanner } from '@/components/chat/DisclaimerBanner';
 import { Scale } from 'lucide-react';
@@ -34,8 +34,15 @@ export default function NewChatPage() {
     setIsCreating(true);
 
     try {
-      const newChatId = await createChat();
-      await fetchChats();
+      const isGuest = useChatStore.getState().isGuestMode;
+      let newChatId: string;
+
+      if (!useAuthStore.getState().isAuthenticated) {
+        newChatId = useChatStore.getState().createGuestChat();
+      } else {
+        newChatId = await createChat();
+        await fetchChats();
+      }
 
       // Start streaming FIRST so the store sets up activeChat + streaming state
       // before the chatId page's selectChat tries to fetch from server.

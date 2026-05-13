@@ -58,7 +58,8 @@
     "delete": "Delete",
     "deleteConfirm": "Are you sure you want to delete this chat?",
     "logoutConfirm": "Are you sure you want to log out?",
-    "toggleSidebar": "Toggle sidebar"
+    "toggleSidebar": "Toggle sidebar",
+    "tryNow": "Try Now"
   },
   "auth": {
     "login": "Log In",
@@ -254,7 +255,9 @@
     "stop": "Stop generating",
     "jumpToBottom": "Jump to bottom",
     "responseReady": "Response ready in \"{chatTitle}\"",
-    "viewChat": "View"
+    "viewChat": "View",
+    "loginToSave": "Login to Save Chats",
+    "loginToSaveDesc": "Create an account to save your chat history and unlock all features."
   },
   "settings": {
     "title": "Settings",

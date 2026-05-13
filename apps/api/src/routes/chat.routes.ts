@@ -6,13 +6,64 @@ import { Router, Request, Response, NextFunction } from "express";
 import { z } from "zod";
 import { chatService } from "../services/chat.service";
 import { authMiddleware } from "../middleware/auth";
-import { queryLimiter } from "../middleware/rateLimiter";
+import { queryLimiter, guestQueryLimiter } from "../middleware/rateLimiter";
 import { auditLog } from "../middleware/audit";
 import { validate } from "../middleware/validate";
 
 const router = Router();
 
-// All chat routes require authentication
+// ==============================================================================
+// UNAUTHENTICATED ROUTES (Guest Mode)
+// ==============================================================================
+
+const guestStreamSchema = z.object({
+  content: z.string().min(1).max(2000),
+  languageCode: z.enum(["en", "hi", "ta", "bn"]).default("en"),
+  history: z.array(z.object({
+    role: z.enum(["user", "assistant"]),
+    content: z.string()
+  })).default([]),
+});
+
+// POST /api/v1/chats/guest/stream (SSE)
+router.post(
+  "/guest/stream",
+  guestQueryLimiter,
+  validate(guestStreamSchema),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { stream, userMessageId } = await chatService.guestMessageStream({
+        content: req.body.content,
+        languageCode: req.body.languageCode,
+        chatHistory: req.body.history,
+      });
+
+      // Set SSE headers
+      res.setHeader("Content-Type", "text/event-stream");
+      res.setHeader("Cache-Control", "no-cache");
+      res.setHeader("Connection", "keep-alive");
+      res.setHeader("X-Accel-Buffering", "no"); // Bypass nginx buffering
+      res.setHeader("X-User-Message-Id", userMessageId);
+      res.flushHeaders();
+
+      // Pipe the stream directly to the response
+      stream.pipe(res);
+
+      // Handle client disconnect
+      req.on("close", () => {
+        stream.destroy();
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
+);
+
+// ==============================================================================
+// AUTHENTICATED ROUTES
+// ==============================================================================
+
+// All following chat routes require authentication
 router.use(authMiddleware);
 
 const createChatSchema = z.object({

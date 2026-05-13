@@ -81,3 +81,9 @@ export const generalLimiter = rateLimiter(
   60,
   (req) => req.user?.sub || req.ip || "unknown"
 );
+export const guestQueryLimiter = rateLimiter(
+  "guest-query",
+  20, // Strict limit for guests
+  60,
+  (req) => req.ip || "unknown"
+);

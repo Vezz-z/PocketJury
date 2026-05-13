@@ -53,11 +53,15 @@ interface ChatState {
   isSimplifyingMessageId: string | null;
   error: string | null;
 
+  isGuestMode: boolean;
+
   fetchChats: () => Promise<void>;
   createChat: () => Promise<string>;
+  createGuestChat: () => string;
   selectChat: (chatId: string) => Promise<void>;
   deleteChat: (chatId: string) => Promise<void>;
   renameChat: (chatId: string, title: string) => Promise<void>;
+  clearGuestChat: () => void;
   sendMessage: (chatId: string, query: string) => Promise<void>;
   stopStreaming: () => void;
   simplifyMessage: (chatId: string, messageId: string) => Promise<void>;
@@ -91,6 +95,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
   streamingChatIds: [],
   isSimplifyingMessageId: null,
   error: null,
+  isGuestMode: false,
 
   fetchChats: async () => {
     set({ isLoadingChats: true });
@@ -105,6 +110,31 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     } catch (err: unknown) {
       set({ chats: [], error: 'Failed to load chats', isLoadingChats: false });
     }
+  },
+
+  createGuestChat: () => {
+    const tempId = `guest-${Date.now()}`;
+    const newChat: Chat = {
+      id: tempId,
+      title: 'Temporary Chat',
+      messagesCount: 0,
+      updatedAt: new Date().toISOString(),
+      messages: [],
+    };
+    set({
+      isGuestMode: true,
+      activeChat: newChat,
+      chats: [], // Guests have no history
+    });
+    return tempId;
+  },
+
+  clearGuestChat: () => {
+    set({
+      isGuestMode: false,
+      activeChat: null,
+      chats: [],
+    });
   },
 
   createChat: async () => {
@@ -183,6 +213,11 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     }
 
     // Normal fetch from server
+    if (get().isGuestMode) {
+      set({ isLoadingMessages: false });
+      return;
+    }
+
     set({ isLoadingMessages: true });
     try {
       const data = await chatApi.get(chatId);
@@ -252,6 +287,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
   },
 
   sendMessage: async (chatId, query) => {
+    const isGuest = get().isGuestMode;
     // Optimistically add user message
     const userMessage: Message = {
       id: `temp-${Date.now()}`,
@@ -292,7 +328,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
 
     // Start title polling immediately for first messages
     // (backend now fires generateTitle before the stream, so it arrives faster)
-    if (isGenericTitle) {
+    if (isGenericTitle && !isGuest) {
       const pollForTitle = (attemptsLeft: number) => {
         if (attemptsLeft <= 0) return;
         setTimeout(() => {
@@ -317,8 +353,17 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     }
 
     try {
-      // Try streaming first
-      const response = await chatApi.sendMessageStream(chatId, query);
+      // Build history for guest mode if necessary
+      const history = isGuest
+        ? (get().activeChat?.messages || [])
+            .filter((m) => m.id !== userMessage.id && m.id !== streamingAssistantId)
+            .map((m) => ({ role: m.role, content: m.content }))
+        : [];
+
+      // Make API request (timeout 180s)
+      const response = isGuest
+        ? await chatApi.guestSendMessageStream(query, 'en', history)
+        : await chatApi.sendMessageStream(chatId, query);
 
       if (!response.body) {
         throw new Error('No response body for streaming');
@@ -379,6 +424,20 @@ export const useChatStore = create<ChatState>()((set, get) => ({
             }
 
             switch (eventType) {
+              case 'title':
+                const newTitle = parsed.title as string;
+                if (newTitle) {
+                  set((state) => ({
+                    activeChat: state.activeChat?.id === chatId
+                      ? { ...state.activeChat, title: newTitle }
+                      : state.activeChat,
+                    chats: state.chats.map((c) =>
+                      c.id === chatId ? { ...c, title: newTitle } : c,
+                    ),
+                  }));
+                }
+                break;
+
               case 'metadata':
                 metadata = parsed;
                 // Only update UI if user is still viewing this chat
@@ -550,39 +609,41 @@ export const useChatStore = create<ChatState>()((set, get) => ({
       if (isStillOnThisChat) {
         set((state) => ({ isSending: false, isStreaming: false, streamingMessageId: null, streamingChatIds: state.streamingChatIds.filter((id) => id !== chatId) }));
 
-        // Re-fetch the chat from the server to replace temporary message IDs
-        // (streaming-*) with real database UUIDs. Without this, operations like
-        // "Simplify" fail because the backend can't find the temp ID in the DB.
-        try {
-          const data = await chatApi.get(chatId);
-          const serverMessages = (data.messages || []).map((m: Record<string, unknown>) => ({
-            ...m,
-            role: typeof m.role === 'string' ? m.role.toLowerCase() : m.role,
-          }));
+        if (!isGuest) {
+          // Re-fetch the chat from the server to replace temporary message IDs
+          // (streaming-*) with real database UUIDs. Without this, operations like
+          // "Simplify" fail because the backend can't find the temp ID in the DB.
+          try {
+            const data = await chatApi.get(chatId);
+            const serverMessages = (data.messages || []).map((m: Record<string, unknown>) => ({
+              ...m,
+              role: typeof m.role === 'string' ? m.role.toLowerCase() : m.role,
+            }));
 
-          // Preserve client-only fields (processingTimeMs, confidenceScore) that
-          // the DB doesn't store — merge them from the current activeChat messages.
-          const currentMessages = get().activeChat?.messages || [];
-          const mergedMessages = serverMessages.map((sm: Message, idx: number) => {
-            // Match by position: the last messages align between client & server
-            const clientMsg = currentMessages[idx];
-            if (clientMsg && sm.role === clientMsg.role) {
-              return {
-                ...sm,
-                processingTimeMs: sm.processingTimeMs ?? clientMsg.processingTimeMs,
-                confidenceScore: sm.confidenceScore ?? clientMsg.confidenceScore,
-              };
-            }
-            return sm;
-          });
+            // Preserve client-only fields (processingTimeMs, confidenceScore) that
+            // the DB doesn't store — merge them from the current activeChat messages.
+            const currentMessages = get().activeChat?.messages || [];
+            const mergedMessages = serverMessages.map((sm: Message, idx: number) => {
+              // Match by position: the last messages align between client & server
+              const clientMsg = currentMessages[idx];
+              if (clientMsg && sm.role === clientMsg.role) {
+                return {
+                  ...sm,
+                  processingTimeMs: sm.processingTimeMs ?? clientMsg.processingTimeMs,
+                  confidenceScore: sm.confidenceScore ?? clientMsg.confidenceScore,
+                };
+              }
+              return sm;
+            });
 
-          set((state) => ({
-            activeChat: state.activeChat?.id === chatId
-              ? { ...state.activeChat, messages: mergedMessages }
-              : state.activeChat,
-          }));
-        } catch {
-          // Non-critical: simplify may fail later, but the chat still works
+            set((state) => ({
+              activeChat: state.activeChat?.id === chatId
+                ? { ...state.activeChat, messages: mergedMessages }
+                : state.activeChat,
+            }));
+          } catch {
+            // Non-critical: simplify may fail later, but the chat still works
+          }
         }
       } else {
         // Stream finished in the background — mark unread + dispatch event for toast

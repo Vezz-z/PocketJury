@@ -192,14 +192,28 @@ export default function HomePage() {
             <p className="mt-6 text-lg text-body leading-relaxed sm:text-xl">
               {t('app.hero.subtitle')}
             </p>
-            <div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-4">
-              <Link href={`/${currentLocale}/register`} className="btn-primary text-base px-8 py-3">
-                {t('app.hero.cta')}
-                <ArrowRight className="ml-2 h-5 w-5" />
+            <div className="mt-10 flex flex-col items-center justify-center gap-6">
+              <Link
+                href={`/${currentLocale}/chat`}
+                className="group relative inline-flex items-center justify-center px-12 py-5 text-lg font-bold text-white transition-all duration-300 bg-gradient-to-r from-primary-600 to-primary-500 rounded-full shadow-[0_8px_30px_rgb(0,0,0,0.12)] hover:shadow-[0_8px_30px_rgba(59,130,246,0.4)] hover:-translate-y-1 overflow-hidden"
+              >
+                <span className="absolute inset-0 w-full h-full bg-gradient-to-br from-white/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></span>
+                {t('nav.tryNow')}
+                <ArrowRight className="ml-3 h-6 w-6 group-hover:translate-x-1 transition-transform" />
               </Link>
-              <Link href={`/${currentLocale}/login`} className="btn-outline text-base px-8 py-3">
-                {t('nav.login')}
-              </Link>
+              
+              <div className="flex flex-col sm:flex-row items-center justify-center gap-4 text-sm">
+                <span className="text-muted dark:text-gray-400">Already have an account?</span>
+                <div className="flex gap-4">
+                  <Link href={`/${currentLocale}/login`} className="font-medium text-primary-600 dark:text-blue-400 hover:text-primary-700 dark:hover:text-blue-300 hover:underline transition-colors">
+                    {t('nav.login')}
+                  </Link>
+                  <span className="text-muted/40 dark:text-gray-500">•</span>
+                  <Link href={`/${currentLocale}/register`} className="font-medium text-primary-600 dark:text-blue-400 hover:text-primary-700 dark:hover:text-blue-300 hover:underline transition-colors">
+                    {t('nav.getStarted')}
+                  </Link>
+                </div>
+              </div>
             </div>
 
             {/* Disclaimer banner */}

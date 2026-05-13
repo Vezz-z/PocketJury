@@ -6,7 +6,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { useTranslations } from 'next-intl';
-import { useChatStore } from '@/store';
+import { useChatStore, useAuthStore } from '@/store';
 import { MessageSquarePlus, Clock, ChevronRight, Trash2 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
@@ -46,8 +46,13 @@ export default function ChatPage() {
   const pathname = usePathname();
 
   useEffect(() => {
+    const locale = pathname.split('/')[1] || 'en';
+    if (!useAuthStore.getState().isAuthenticated) {
+      router.replace(`/${locale}/chat/new`);
+      return;
+    }
     fetchChats();
-  }, [fetchChats]);
+  }, [fetchChats, pathname, router]);
 
   const handleNewChat = () => {
     const locale = pathname.split('/')[1] || 'en';

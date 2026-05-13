@@ -7,7 +7,7 @@ import { useEffect, useState, useRef } from 'react';
 import { useTranslations } from 'next-intl';
 import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
-import { useChatStore, useUIStore } from '@/store';
+import { useChatStore, useUIStore, useAuthStore } from '@/store';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import {
   MessageSquare,
@@ -172,6 +172,7 @@ export function Sidebar({ open, desktopOpen, onClose }: SidebarProps) {
   const router = useRouter();
   const pathname = usePathname();
   const { chats, fetchChats, deleteChat, renameChat, streamingChatIds } = useChatStore();
+  const { isAuthenticated } = useAuthStore();
 
   const [chatToDelete, setChatToDelete] = useState<string | null>(null);
 
@@ -211,9 +212,9 @@ export function Sidebar({ open, desktopOpen, onClose }: SidebarProps) {
   }); // eslint-disable-line react-hooks/exhaustive-deps
 
   const navItems = [
-    { href: '/chat', icon: MessageSquare, label: t('chat'), shortcut: 'Ctrl+Alt+C' },
+    ...(isAuthenticated ? [{ href: '/chat', icon: MessageSquare, label: t('chat'), shortcut: 'Ctrl+Alt+C' }] : []),
     { href: '/dlsa', icon: Phone, label: t('dlsa'), shortcut: '' },
-    { href: '/settings', icon: Settings, label: t('settings'), shortcut: 'Ctrl+Shift+S' },
+    ...(isAuthenticated ? [{ href: '/settings', icon: Settings, label: t('settings'), shortcut: 'Ctrl+Shift+S' }] : []),
   ];
 
   const sidebarContent = (
@@ -242,15 +243,17 @@ export function Sidebar({ open, desktopOpen, onClose }: SidebarProps) {
       </div>
 
       {/* New Chat */}
-      <div className="p-3">
-        <button className="btn-primary w-full text-sm" onClick={handleNewChat} title={`${t('newChat')} (Ctrl+Shift+K)`}>
-          <MessageSquarePlus className="h-4 w-4 mr-2" />
-          {t('newChat')}
-        </button>
-      </div>
+      {isAuthenticated && (
+        <div className="p-3">
+          <button className="btn-primary w-full text-sm" onClick={handleNewChat} title={`${t('newChat')} (Ctrl+Shift+K)`}>
+            <MessageSquarePlus className="h-4 w-4 mr-2" />
+            {t('newChat')}
+          </button>
+        </div>
+      )}
 
       {/* Nav */}
-      <nav className="px-3 space-y-1">
+      <nav className="px-3 mt-3 space-y-1">
         {navItems.map((item) => {
           const isActive = pathname.includes(item.href);
           return (
@@ -273,28 +276,45 @@ export function Sidebar({ open, desktopOpen, onClose }: SidebarProps) {
         })}
       </nav>
 
-      {/* Chat History */}
-      <div className="flex-1 overflow-y-auto mt-4 px-3 scrollbar-thin">
-        <p className="text-xs font-medium text-muted uppercase tracking-wider px-3 mb-2">
-          {t('recentChats')}
-        </p>
-        <div className="space-y-0.5">
-          {Array.isArray(chats) && chats.slice(0, 20).map((chat) => (
-            <ChatItem
-              key={chat.id}
-              chat={chat}
-              isActive={pathname.includes(chat.id)}
-              isStreaming={streamingChatIds.includes(chat.id)}
-              hasUnread={chat.hasUnread}
-              onSelect={() => {
-                router.push(`/chat/${chat.id}`);
-                onClose();
-              }}
-              onDelete={() => setChatToDelete(chat.id)}
-              onRename={(title) => renameChat(chat.id, title)}
-            />
-          ))}
-        </div>
+      {/* Chat History / Guest CTA */}
+      <div className="flex-1 overflow-y-auto mt-4 px-3 scrollbar-thin flex flex-col">
+        {isAuthenticated ? (
+          <>
+            <p className="text-xs font-medium text-muted uppercase tracking-wider px-3 mb-2">
+              {t('recentChats')}
+            </p>
+            <div className="space-y-0.5">
+              {Array.isArray(chats) && chats.slice(0, 20).map((chat) => (
+                <ChatItem
+                  key={chat.id}
+                  chat={chat}
+                  isActive={pathname.includes(chat.id)}
+                  isStreaming={streamingChatIds.includes(chat.id)}
+                  hasUnread={chat.hasUnread}
+                  onSelect={() => {
+                    router.push(`/chat/${chat.id}`);
+                    onClose();
+                  }}
+                  onDelete={() => setChatToDelete(chat.id)}
+                  onRename={(title) => renameChat(chat.id, title)}
+                />
+              ))}
+            </div>
+          </>
+        ) : (
+          <div className="mt-8 mx-2 p-4 rounded-xl border border-[var(--color-border)] bg-card text-center shadow-sm">
+            <h3 className="text-sm font-semibold text-heading mb-2">{t('loginToSave')}</h3>
+            <p className="text-xs text-muted mb-4">{t('loginToSaveDesc')}</p>
+            <div className="flex flex-col gap-2">
+              <Link href={`/${pathname.split('/')[1] || 'en'}/register`} className="btn-primary py-2 text-xs w-full">
+                {t('getStarted')}
+              </Link>
+              <Link href={`/${pathname.split('/')[1] || 'en'}/login`} className="btn-outline py-2 text-xs w-full">
+                {t('login')}
+              </Link>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Sidebar Footer Links */}

@@ -166,6 +166,17 @@ export const chatApi = {
       timeout: 180000,
     }),
 
+  /**
+   * Stream the AI response via SSE for GUEST users.
+   * Does not use authentication.
+   */
+  guestSendMessageStream: (query: string, languageCode: string, history: any[]) =>
+    fetchWithAuth('/chats/guest/stream', {
+      method: 'POST',
+      body: JSON.stringify({ content: query, languageCode, history }),
+      timeout: 180000,
+    }),
+
   simplify: (chatId: string, messageId: string) =>
     fetchWithAuth(`/chats/${chatId}/messages/${messageId}/simplify`, { method: 'POST', timeout: 120000 }).then((r) => r.json()),
 
@@ -174,7 +185,7 @@ export const chatApi = {
    * caller can read the body as a ReadableStream.
    */
   simplifyStream: (chatId: string, messageId: string) =>
-    fetchWithAuth(`/chats/${chatId}/messages/${messageId}/simplify`, { method: 'POST', timeout: 120000 }),
+    fetchWithAuth(`/chats/${chatId}/messages/${messageId}/simplify/stream`, { method: 'POST', timeout: 120000 }),
 
   getReferences: (chatId: string, messageId: string) =>
     fetchWithAuth(`/chats/${chatId}/messages/${messageId}/references`, { method: 'POST' }).then((r) => r.json()),

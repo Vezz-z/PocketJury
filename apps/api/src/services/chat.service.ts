@@ -319,6 +319,7 @@ export class ChatService {
             where: { id: chatId },
             data: { title },
           });
+          passthrough.write(`event: title\ndata: ${JSON.stringify({ title })}\n\n`);
         } catch (titleErr) {
           logger.warn({ err: titleErr, chatId }, "Failed to save generated title");
         }
@@ -382,6 +383,71 @@ export class ChatService {
     })();
 
     return { stream: passthrough as Readable, userMessageId: userMessage.id };
+  }
+
+  /**
+   * Streaming message send for GUEST users.
+   * Completely bypasses PostgreSQL (no chats or messages are saved).
+   * Passes the entire chat history directly to the AI service.
+   */
+  async guestMessageStream(input: {
+    content: string;
+    languageCode: string;
+    chatHistory: { role: string; content: string }[];
+  }): Promise<{ stream: Readable; userMessageId: string }> {
+    // Sanitize input
+    const sanitizedContent = input.content
+      .replace(/<[^>]*>/g, "")
+      .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, "")
+      .trim();
+
+    if (!sanitizedContent || sanitizedContent.length > 2000) {
+      throw createError("Message must be between 1 and 2000 characters", 400);
+    }
+
+    // Generate a temporary message ID for the frontend to bind to
+    const { randomUUID } = await import("crypto");
+    const userMessageId = randomUUID();
+
+    // Get the raw SSE stream from FastAPI
+    // Using a dummy user/chat ID since it's not saved
+    const aiResponse = await aiService.queryStream({
+      query: sanitizedContent,
+      userId: "guest",
+      chatId: "guest_chat",
+      personaMode: "RURAL_USER", // Default for guests
+      languageCode: input.languageCode,
+      chatHistory: input.chatHistory,
+    });
+
+    if (!aiResponse.body) {
+      throw createError("AI service returned empty stream", 503);
+    }
+
+    const { PassThrough } = await import("node:stream");
+    const passthrough = new PassThrough();
+
+    // Asynchronously consume the stream to prevent memory leaks,
+    // but do NOT save anything to the database since it's a guest chat.
+    (async () => {
+      try {
+        const reader = aiResponse.body!.getReader();
+        const decoder = new TextDecoder("utf-8");
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          const chunk = decoder.decode(value, { stream: true });
+          passthrough.write(chunk);
+        }
+        passthrough.end();
+      } catch (err) {
+        logger.error({ err }, "Failed to process guest stream");
+        passthrough.end();
+      }
+    })();
+
+    return { stream: passthrough as Readable, userMessageId };
   }
 
   async simplifyMessage(messageId: string, userId: string) {

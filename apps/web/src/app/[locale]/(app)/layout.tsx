@@ -30,6 +30,12 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!hydrated) return; // Don't redirect until hydration completes
     if (!isAuthenticated) {
+      const currentPath = window.location.pathname;
+      // Allow unauthenticated access to chat routes (Guest Mode)
+      if (currentPath.match(/^\/[^/]+\/chat(\/|$)/)) {
+        setIsChecking(false);
+        return;
+      }
       router.push('/login');
       return;
     }
