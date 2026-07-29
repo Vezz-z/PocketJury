@@ -1,5 +1,5 @@
 # 🚀 PocketJury v1.0.2 Release Notes
-**Date: May 14th, 2026**
+**Date: July 30th, 2026**
 
 We are thrilled to announce the official `v1.0.2` update of **PocketJury**! This release introduces **Guest Mode with local Email OTP authentication**, updates the LLM engine to **NVIDIA Nemotron 3 Ultra 550B**, and implements automatic multi-model fallback resiliency to guarantee zero downtime for AI legal inquiries.
 
