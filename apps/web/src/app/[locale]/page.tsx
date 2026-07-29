@@ -141,8 +141,8 @@ export default function HomePage() {
               <Link href={`/${currentLocale}/login`} className="btn-ghost text-sm">
                 {t('nav.login')}
               </Link>
-              <a href="mailto:pocketjuryai@gmail.com" className="btn-ghost text-sm">
-                {t('common.contactUs') || 'Contact Us'}
+              <a href="mailto:reply.to.pocketjuryai@gmail.com" className="btn-ghost text-sm">
+                {t('app.footer.contactUs')}
               </a>
               <Link href={`/${currentLocale}/register`} className="btn-primary text-sm">
                 {t('nav.getStarted')}
@@ -165,8 +165,8 @@ export default function HomePage() {
             <Link href={`/${currentLocale}/login`} className="btn-ghost text-sm w-full justify-start">
               {t('nav.login')}
             </Link>
-            <a href="mailto:pocketjuryai@gmail.com" className="btn-ghost text-sm w-full justify-start">
-              {t('common.contactUs') || 'Contact Us'}
+            <a href="mailto:reply.to.pocketjuryai@gmail.com" className="btn-ghost text-sm w-full justify-start">
+              {t('app.footer.contactUs')}
             </a>
             <Link href={`/${currentLocale}/register`} className="btn-primary text-sm w-full justify-center mt-2">
               {t('nav.getStarted')}
@@ -203,7 +203,7 @@ export default function HomePage() {
               </Link>
               
               <div className="flex flex-col sm:flex-row items-center justify-center gap-4 text-sm">
-                <span className="text-muted dark:text-gray-400">Already have an account?</span>
+                <span className="text-muted dark:text-gray-400">{t('auth.hasAccount')}</span>
                 <div className="flex gap-4">
                   <Link href={`/${currentLocale}/login`} className="font-medium text-primary-600 dark:text-blue-400 hover:text-primary-700 dark:hover:text-blue-300 hover:underline transition-colors">
                     {t('nav.login')}
@@ -318,7 +318,7 @@ export default function HomePage() {
               <Link href={`/${currentLocale}/legal-sources`} target="_blank" rel="noopener noreferrer" className="text-muted hover:text-primary-600 dark:hover:text-blue-400 transition-colors">
                 {t('auth.legalSourcesLink')}
               </Link>
-              <a href="mailto:pocketjuryai@gmail.com" className="text-muted hover:text-primary-600 dark:hover:text-blue-400 transition-colors">
+              <a href="mailto:reply.to.pocketjuryai@gmail.com" className="text-muted hover:text-primary-600 dark:hover:text-blue-400 transition-colors">
                 {t('app.footer.contactUs')}
               </a>
             </div>

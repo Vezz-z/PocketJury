@@ -104,6 +104,9 @@ export default function ForgotPasswordPage() {
                 <CheckCircle className="h-7 w-7 text-green-600 dark:text-green-400" />
               </div>
               <p className="text-sm text-body">{t('resetLinkSent')}</p>
+              <p className="text-xs text-muted italic mt-2 p-2.5 rounded-lg bg-elevated border border-[var(--color-border)]">
+                {t('checkSpamFolderNotice')}
+              </p>
               <Link
                 href="/login"
                 className="text-sm text-primary-600 dark:text-blue-400 hover:underline flex items-center justify-center gap-1 mt-4"

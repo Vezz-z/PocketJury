@@ -47,7 +47,8 @@ export default function ChatPage() {
 
   useEffect(() => {
     const locale = pathname.split('/')[1] || 'en';
-    if (!useAuthStore.getState().isAuthenticated) {
+    const isAuthed = useAuthStore.getState().isAuthenticated;
+    if (!isAuthed) {
       router.replace(`/${locale}/chat/new`);
       return;
     }

@@ -92,7 +92,7 @@ export default function SettingsPage() {
       await updatePersona(persona);
       toast.success(t('personaUpdated'));
     } catch {
-      toast.error('Failed to update');
+      toast.error(tCommon('failedToUpdate'));
     }
   };
 
@@ -399,11 +399,11 @@ export default function SettingsPage() {
             {t('legalSources')}
           </Link>
           <a
-            href="mailto:pocketjuryai@gmail.com"
+            href="mailto:reply.to.pocketjuryai@gmail.com"
             className="w-full flex items-center justify-start px-4 py-2.5 rounded-lg text-body hover:bg-elevated transition-colors text-sm font-medium"
           >
             <Mail className="h-4 w-4 mr-2" />
-            {tCommon('contactUs') || 'Contact Us'}
+            {t('contactUs')}
           </a>
         </div>
       </section>

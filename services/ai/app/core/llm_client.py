@@ -20,12 +20,20 @@ RATE_LIMIT_MESSAGE = (
     "reached. Please try again tomorrow or add credits to your OpenRouter account "
     "to restore service."
 )
+FALLBACK_MODELS = [
+    "nvidia/nemotron-3-super-120b-a12b:free",
+    "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
+    "openai/gpt-oss-20b:free",
+    "google/gemma-4-31b-it:free",
+    "nvidia/nemotron-3-nano-30b-a3b:free",
+    "openrouter/free",
+]
 
 
 class LLMClient:
     """Client for OpenRouter API (OpenAI-compatible endpoint).
 
-    Uses the model configured via ``LLM_MODEL_ID`` (default: gpt-oss-120b:free).
+    Uses the model configured via ``LLM_MODEL_ID`` (default: nvidia/nemotron-3-ultra-550b-a55b:free).
     Supports both standard (blocking) and streaming generation.
     """
 
@@ -61,6 +69,7 @@ class LLMClient:
         max_tokens: int | None = None,
         temperature: float | None = None,
         stop_sequences: list[str] | None = None,
+        model_id: str | None = None,
     ) -> str:
         """Generate a complete response from OpenRouter (non-streaming).
 
@@ -72,36 +81,46 @@ class LLMClient:
             messages.append({"role": "system", "content": system_prompt})
         messages.append({"role": "user", "content": prompt})
 
-        try:
-            response = await self._client.chat.completions.create(
-                model=self._model_id,
-                messages=messages,
-                max_tokens=max_tokens or settings.LLM_MAX_TOKENS,
-                temperature=temperature if temperature is not None else settings.LLM_TEMPERATURE,
-                stop=stop_sequences or None,
-                extra_body={
-                    "provider": {"data_collection": "allow"},
-                },
-            )
+        base_model = model_id or self._model_id
+        candidate_models = [base_model] + [m for m in FALLBACK_MODELS if m != base_model]
 
-            generated_text = response.choices[0].message.content or ""
+        for model in candidate_models:
+            try:
+                response = await self._client.chat.completions.create(
+                    model=model,
+                    messages=messages,
+                    max_tokens=max_tokens or settings.LLM_MAX_TOKENS,
+                    temperature=temperature if temperature is not None else settings.LLM_TEMPERATURE,
+                    stop=stop_sequences or None,
+                    extra_body={
+                        "provider": {"data_collection": "allow"},
+                    },
+                )
 
-            usage = response.usage
-            logger.debug(
-                "LLM response generated",
-                model=self._model_id,
-                input_tokens=usage.prompt_tokens if usage else 0,
-                output_tokens=usage.completion_tokens if usage else 0,
-            )
+                generated_text = response.choices[0].message.content or ""
 
-            return generated_text
+                usage = response.usage
+                logger.debug(
+                    "LLM response generated",
+                    model=model,
+                    input_tokens=usage.prompt_tokens if usage else 0,
+                    output_tokens=usage.completion_tokens if usage else 0,
+                )
 
-        except RateLimitError as e:
-            logger.warning("LLM rate limit reached (429)", error=str(e), model=self._model_id)
-            return RATE_LIMIT_MESSAGE
-        except Exception as e:
-            logger.error("LLM generation failed", error=str(e), model=self._model_id)
-            raise
+                return generated_text
+
+            except RateLimitError as e:
+                logger.warning("LLM rate limit reached (429)", error=str(e), model=model)
+                return RATE_LIMIT_MESSAGE
+            except Exception as e:
+                err_str = str(e)
+                if "404" in err_str or "NotFoundError" in type(e).__name__ or "unavailable for free" in err_str:
+                    logger.warning("LLM model 404/unavailable, attempting fallback model", current_model=model, error=err_str)
+                    continue
+                logger.error("LLM generation failed", error=err_str, model=model)
+                raise
+
+        raise RuntimeError(f"All LLM candidate models failed: {candidate_models}")
 
     # ------------------------------------------------------------------
     # Streaming generation (SSE)
@@ -114,6 +133,7 @@ class LLMClient:
         max_tokens: int | None = None,
         temperature: float | None = None,
         stop_sequences: list[str] | None = None,
+        model_id: str | None = None,
     ) -> AsyncIterator[str]:
         """Stream tokens from OpenRouter as they are generated.
 
@@ -125,26 +145,36 @@ class LLMClient:
             messages.append({"role": "system", "content": system_prompt})
         messages.append({"role": "user", "content": prompt})
 
-        try:
-            stream = await self._client.chat.completions.create(
-                model=self._model_id,
-                messages=messages,
-                max_tokens=max_tokens or settings.LLM_MAX_TOKENS,
-                temperature=temperature if temperature is not None else settings.LLM_TEMPERATURE,
-                stop=stop_sequences or None,
-                stream=True,
-                extra_body={
-                    "provider": {"data_collection": "allow"},
-                },
-            )
+        base_model = model_id or self._model_id
+        candidate_models = [base_model] + [m for m in FALLBACK_MODELS if m != base_model]
 
-            async for chunk in stream:
-                if chunk.choices and chunk.choices[0].delta.content:
-                    yield chunk.choices[0].delta.content
+        for model in candidate_models:
+            try:
+                stream = await self._client.chat.completions.create(
+                    model=model,
+                    messages=messages,
+                    max_tokens=max_tokens or settings.LLM_MAX_TOKENS,
+                    temperature=temperature if temperature is not None else settings.LLM_TEMPERATURE,
+                    stop=stop_sequences or None,
+                    stream=True,
+                    extra_body={
+                        "provider": {"data_collection": "allow"},
+                    },
+                )
 
-        except RateLimitError as e:
-            logger.warning("LLM stream rate limit reached (429)", error=str(e), model=self._model_id)
-            yield RATE_LIMIT_MESSAGE
-        except Exception as e:
-            logger.error("LLM streaming failed", error=str(e), model=self._model_id)
-            raise
+                async for chunk in stream:
+                    if chunk.choices and chunk.choices[0].delta.content:
+                        yield chunk.choices[0].delta.content
+                return
+
+            except RateLimitError as e:
+                logger.warning("LLM stream rate limit reached (429)", error=str(e), model=model)
+                yield RATE_LIMIT_MESSAGE
+                return
+            except Exception as e:
+                err_str = str(e)
+                if "404" in err_str or "NotFoundError" in type(e).__name__ or "unavailable for free" in err_str:
+                    logger.warning("LLM stream model 404/unavailable, attempting fallback model", current_model=model, error=err_str)
+                    continue
+                logger.error("LLM streaming failed", error=err_str, model=model)
+                raise

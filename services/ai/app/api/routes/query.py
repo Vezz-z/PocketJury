@@ -18,6 +18,7 @@ from app.models.schemas import (
 )
 from app.core.rag_pipeline import RAGPipeline
 from app.core.prompt_templates import SIMPLIFY_PROMPT, TITLE_PROMPT
+from app.config import get_settings
 
 logger = structlog.get_logger()
 router = APIRouter()
@@ -241,6 +242,7 @@ async def generate_title(request: Request, body: dict) -> dict:
         prompt=prompt,
         max_tokens=30,
         temperature=0.3,
+        model_id=get_settings().TITLE_LLM_MODEL_ID,
     )
 
     # Clean up: remove quotes, trailing punctuation, limit length

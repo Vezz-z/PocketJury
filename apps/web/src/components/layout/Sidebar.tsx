@@ -177,8 +177,8 @@ export function Sidebar({ open, desktopOpen, onClose }: SidebarProps) {
   const [chatToDelete, setChatToDelete] = useState<string | null>(null);
 
   useEffect(() => {
-    fetchChats();
-  }, [fetchChats]);
+    if (isAuthenticated) fetchChats();
+  }, [fetchChats, isAuthenticated]);
 
   // Navigate to /chat/new instead of creating a chat
   const handleNewChat = () => {
@@ -243,17 +243,15 @@ export function Sidebar({ open, desktopOpen, onClose }: SidebarProps) {
       </div>
 
       {/* New Chat */}
-      {isAuthenticated && (
-        <div className="p-3">
-          <button className="btn-primary w-full text-sm" onClick={handleNewChat} title={`${t('newChat')} (Ctrl+Shift+K)`}>
-            <MessageSquarePlus className="h-4 w-4 mr-2" />
-            {t('newChat')}
-          </button>
-        </div>
-      )}
+      <div className="p-3">
+        <button className="btn-primary w-full text-sm" onClick={handleNewChat} title={`${t('newChat')} (Ctrl+Shift+K)`}>
+          <MessageSquarePlus className="h-4 w-4 mr-2" />
+          {t('newChat')}
+        </button>
+      </div>
 
       {/* Nav */}
-      <nav className="px-3 mt-3 space-y-1">
+      <nav className="px-3 mt-1 space-y-1">
         {navItems.map((item) => {
           const isActive = pathname.includes(item.href);
           return (
@@ -278,7 +276,7 @@ export function Sidebar({ open, desktopOpen, onClose }: SidebarProps) {
 
       {/* Chat History / Guest CTA */}
       <div className="flex-1 overflow-y-auto mt-4 px-3 scrollbar-thin flex flex-col">
-        {isAuthenticated ? (
+        {isAuthenticated || (Array.isArray(chats) && chats.length > 0) ? (
           <>
             <p className="text-xs font-medium text-muted uppercase tracking-wider px-3 mb-2">
               {t('recentChats')}

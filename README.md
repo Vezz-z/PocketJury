@@ -1,4 +1,4 @@
-# ⚖️ PocketJury (v1.0.1)
+# ⚖️ PocketJury (v1.0.2)
 
 **An AI-Powered Legal Informational Tool for the Indian Judiciary Context**
 
@@ -9,13 +9,15 @@ Welcome to **PocketJury**! This application is designed to bridge the massive ga
 ## 🌟 Key Features & Capabilities
 
 - **Zero-Hallucination Legal Framing**: PocketJury completely rejects the baseline knowledge of the AI model. Instead, it utilizes strictly isolated vector embeddings to dynamically inject actual, verified laws straight into the LLM's context window.
-- **Advanced Streaming & Concurrency**: Leverages Server-Sent Events (SSE) for real-time, typewriter-style responses. Fully supports background stream processing—switch chats seamlessly while the AI continues generating in the background with persistent UI indicators and toast notifications.
+- **Ephemeral Guest Mode**: Unauthenticated visitors can instantly chat without registering via a high-visibility "Try Now" hero CTA. Guest data is kept strictly in-memory (zero persistent storage) with rate-limiting protection.
+- **Advanced Streaming & Concurrency**: Leverages Server-Sent Events (SSE) for real-time, typewriter-style responses with immediate `event: title` broadcasting. Fully supports background stream processing—switch chats seamlessly while the AI continues generating in the background with persistent UI indicators and toast notifications.
+- **Upgraded AI Engine & Multi-Model Resiliency**: Default reasoning engine powered by `nvidia/nemotron-3-ultra-550b-a55b:free` via OpenRouter, backed by an automated 6-model fallback chain (`nemotron-3-super-120b`, `nemotron-3-nano-omni`, `gpt-oss-20b`, `gemma-4-31b-it`, `nemotron-3-nano-30b`, `openrouter/free`) for zero downtime.
 - **Multi-Lingual Support**: The UI and AI response logic are fully localized to support **English (`en`), Hindi (`hi`), Tamil (`ta`), and Bengali (`bn`)** with real-time UI switching via `next-intl`.
 - **IPC to BNS Automatic Transitioning**: Historical Indian Penal Code (IPC) queries are natively forced by the application to map perfectly to the new Bharatiya Nyaya Sanhita (BNS) 2023 equivalents.
 - **Semantic UI Chat Navigation**: Features instant-state message deletion, conversational tracking, "Simplify" toggles to reduce legal jargon, "Stop Generating" kill switches, and dynamic scroll handlers.
 - **Keyboard Power User Shortcuts**: Includes `Ctrl+Shift+K` (New Chat), `Ctrl+Alt+C` (Chats), `Ctrl+Alt+K` (Toggle Sidebar), and `Ctrl+Shift+S` (Settings) for rapid navigation.
 - **Built-in Safety Guardrails**: Sensitive queries (e.g., Domestic Violence or Child Exploitation) bypass normal pipelines to automatically surface National Emergency Helplines (like 181, 1098, and 1930).
-- **Google OAuth & MFA**: Supports "Continue with Google" sign-in/sign-up with server-side ID token verification. All email logins require OTP-based multi-factor authentication with secure email editing in the OTP step.
+- **Google OAuth, Local Email OTP & MFA**: Supports "Continue with Google" sign-in/sign-up with server-side ID token verification. Email authentication includes local OTP verification, inline email editing, and session management.
 - **Session-Aware Authentication**: Cross-tab session detection prompts users to continue with their existing account or sign in with a different one. Includes change password (Settings), forgot/reset password flows, and email domain validation.
 
 ---

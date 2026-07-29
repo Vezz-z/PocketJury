@@ -30,7 +30,7 @@
 | **Customizable** | Can fine-tune on Indian legal corpus |
 
 **Trade-offs:**
-- Lower quality than OpenRouter GPT-OSS-120B or Claude 3.5 Sonnet (especially for complex legal reasoning)
+- Lower quality than OpenRouter NVIDIA Nemotron 3 Ultra 550B or Claude 3.5 Sonnet (especially for complex legal reasoning)
 - Requires decent hardware (8GB+ VRAM for GPU, 16GB+ RAM for CPU)
 - Slower inference on CPU
 
@@ -124,7 +124,7 @@ ollama run llama3.1:8b "What are fundamental rights in India?"
 
 ## 5. Modify PocketJury for Ollama
 
-Since our current provider is OpenRouter (openai/gpt-oss-120b:free), switching to Ollama requires changing config.py and llm_client.py to use the OpenAI-compatible API (Ollama supports it natively).
+Since our current provider is OpenRouter (nvidia/nemotron-3-ultra-550b-a55b:free), switching to Ollama requires changing config.py and llm_client.py to use the OpenAI-compatible API (Ollama supports it natively).
 
 ### Step 1: Update `config.py`
 
@@ -394,7 +394,7 @@ RAG_TOP_K_FINAL: int = 5  # Fewer context chunks to fit in smaller context windo
 |-----------|--------|-----------|
 | **Lower quality** | May produce less accurate legal responses | Use larger models (70B) or fine-tune |
 | **Slower inference** | 10-30s per query on CPU | Use GPU or smaller models |
-| **Context window** | 4K-8K tokens vs 128K for OpenRouter GPT-OSS-120B | Reduce RAG_TOP_K_FINAL, summarize context |
+| **Context window** | 4K-8K tokens vs 128K for OpenRouter NVIDIA Nemotron 3 Ultra 550B | Reduce RAG_TOP_K_FINAL, summarize context |
 | **Multilingual** | Hindi/Tamil/Bengali support varies by model | Test with target languages, consider fine-tuning |
 | **Hallucination** | More prone to fabricating legal citations | RAG grounding helps, but validate outputs |
 | **No streaming** | Ollama via LangChain supports streaming, and PocketJury v1.0.1+ UI fully supports Server-Sent Events (SSE). To enable local streaming, update the `AsyncOpenAI` client in `llm_client.py` to `stream=True` and yield chunks. | See `routes/query.py` for streaming implementation |
@@ -669,7 +669,7 @@ We use **LoRA (Low-Rank Adaptation)** via Hugging Face PEFT for parameter-effici
 fine-tuning. This trains only ~0.1-1% of the model parameters, drastically reducing
 GPU memory requirements.
 
-> **Note on model weights:** GPT-OSS-120B is an open-weight model. Download the
+> **Note on model weights:** NVIDIA Nemotron 3 Ultra 550B is an open-weight model. Download the
 > weights from the model's Hugging Face page or OpenAI's open-weight release
 > repository. Check [huggingface.co/openai](https://huggingface.co/openai) for the
 > official release. You may need to accept a license agreement before downloading.
@@ -680,7 +680,7 @@ GPU memory requirements.
 
 ```python
 """
-PocketJury — Fine-tune GPT-OSS-120B with LoRA for Indian Legal Domain
+PocketJury — Fine-tune NVIDIA Nemotron 3 Ultra 550B with LoRA for Indian Legal Domain
 ======================================================================
 Adjust model_name_or_path once weights are available on Hugging Face.
 """
@@ -698,7 +698,7 @@ from trl import SFTTrainer
 # ──────────────────────────────────────────────
 # 1. Configuration
 # ──────────────────────────────────────────────
-MODEL_ID = "openai/gpt-oss-120b"          # Update if HF repo name differs
+MODEL_ID = "nvidia/nemotron-3-ultra-550b-a55b"          # Update if HF repo name differs
 DATASET_PATH = "./data/legal_qa.jsonl"     # Your prepared JSONL
 OUTPUT_DIR = "./output/pocketjury-legal-v1"
 EPOCHS = 3
@@ -844,7 +844,7 @@ To create a standalone model (no adapter overhead at inference):
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from peft import PeftModel
 
-BASE_MODEL = "openai/gpt-oss-120b"
+BASE_MODEL = "nvidia/nemotron-3-ultra-550b-a55b"
 ADAPTER_PATH = "./output/pocketjury-legal-v1"
 MERGED_PATH = "./output/pocketjury-legal-v1-merged"
 
@@ -926,7 +926,7 @@ python -m vllm.entrypoints.openai.api_server \
 
 # Or serve base model + LoRA adapter (no merge needed)
 python -m vllm.entrypoints.openai.api_server \
-  --model openai/gpt-oss-120b \
+  --model nvidia/nemotron-3-ultra-550b-a55b \
   --enable-lora \
   --lora-modules pocketjury=./output/pocketjury-legal-v1 \
   --host 0.0.0.0 \
@@ -1076,7 +1076,7 @@ asyncio.run(evaluate())
 ## 11. Future: Latency Optimisation with Local LLM
 
 > **Status:** Not yet implemented. This section documents strategies for reducing
-> response latency when migrating from OpenRouter (`gpt-oss-120b:free`) to a local
+> response latency when migrating from OpenRouter (`nvidia/nemotron-3-ultra-550b-a55b:free`) to a local
 > LLM via Ollama. These techniques complement the SSE streaming already implemented
 > in the current pipeline.
 

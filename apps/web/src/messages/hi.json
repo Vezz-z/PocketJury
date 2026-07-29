@@ -59,7 +59,9 @@
     "deleteConfirm": "क्या आप इस चैट को हटाना चाहते हैं?",
     "logoutConfirm": "क्या आप लॉग आउट करना चाहते हैं?",
     "toggleSidebar": "साइडबार टॉगल करें",
-    "tryNow": "अभी आज़माएं"
+    "tryNow": "अभी आज़माएं",
+    "loginToSave": "चैट सेव करने के लिए लॉगिन करें",
+    "loginToSaveDesc": "अपनी चैट हिस्ट्री सेव करने और सभी सुविधाएँ अनलॉक करने के लिए अकाउंट बनाएँ।"
   },
   "auth": {
     "login": "लॉग इन करें",
@@ -105,6 +107,7 @@
     "termsLink": "सेवा की शर्तें",
     "privacyLink": "गोपनीयता नीति",
     "legalSourcesLink": "कानूनी स्रोत",
+    "contactUs": "संपर्क करें",
     "rememberMe": "मुझे याद रखें",
     "mfaSent": "एक सत्यापन कोड आपके ईमेल पर भेजा गया है",
     "mfaError": "अमान्य सत्यापन कोड",
@@ -138,7 +141,15 @@
     "googleAuthNotConfigured": "Google साइन-इन कॉन्फ़िगर नहीं है",
     "googleAuthUnavailable": "Google साइन-इन उपलब्ध नहीं है",
     "verificationSent": "सत्यापन कोड आपके ईमेल पर भेजा गया है",
-    "resendCodeTimer": "{seconds} सेकंड में कोड पुनः भेजें"
+    "resendCodeTimer": "{seconds} सेकंड में कोड पुनः भेजें",
+    "checkSpamFolderNotice": "ईमेल नहीं मिल रहा? कृपया pocketjuryai@gmail.com से आए ईमेल के लिए अपना स्पैम (Spam) या जंक फोल्डर जांचें।",
+    "verificationSentNotice": "आपकी ईमेल पर सत्यापन कोड भेज दिया गया है।",
+    "verificationResentNotice": "सत्यापन कोड आपकी ईमेल पर पुनः भेजा गया।",
+    "verifyMagicLoading": "मैजिक लिंक सत्यापित किया जा रहा है...",
+    "verifyMagicSuccess": "सफलतापूर्वक लॉग इन किया गया!",
+    "verifyMagicError": "सत्यापन विफल। लिंक अमान्य या समाप्त हो गया हो सकता है।",
+    "googleNotConfigured": "गूगल साइन-इन कॉन्फ़िगर नहीं किया गया है",
+    "googleLoadError": "गूगल साइन-इन लोड करने में विफल। कृपया रीफ्रेश करें।"
   },
   "onboarding": {
     "title": "आइए आपके अनुभव को व्यक्तिगत बनाएं",
@@ -257,7 +268,8 @@
     "responseReady": "\"{chatTitle}\" में प्रतिक्रिया तैयार है",
     "viewChat": "देखें",
     "loginToSave": "चैट सेव करने के लिए लॉगिन करें",
-    "loginToSaveDesc": "अपनी चैट हिस्ट्री सेव करने और सभी सुविधाएँ अनलॉक करने के लिए अकाउंट बनाएँ।"
+    "loginToSaveDesc": "अपनी चैट हिस्ट्री सेव करने और सभी सुविधाएँ अनलॉक करने के लिए अकाउंट बनाएँ।",
+    "stopGenerating": "उत्तर रोकना"
   },
   "settings": {
     "title": "सेटिंग्स",
@@ -357,7 +369,9 @@
     "deleteChatDesc": "क्या आप वाकई इस बातचीत को हटाना चाहते हैं?",
     "deleteAccountTitle": "खाता हटाएं",
     "deleteAccountDesc": "क्या आप वाकई अपना खाता स्थायी रूप से हटाना चाहते हैं?",
-    "contactUs": "संपर्क करें"
+    "contactUs": "संपर्क करें",
+    "failedToUpdate": "अपडेट करने में विफल",
+    "failedToUpdateLanguage": "भाषा अपडेट करने में विफल"
   },
   "consent": {
     "title": "डेटा संग्रह सहमति",

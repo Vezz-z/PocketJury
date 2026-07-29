@@ -63,15 +63,15 @@ interface ChatState {
   renameChat: (chatId: string, title: string) => Promise<void>;
   clearGuestChat: () => void;
   sendMessage: (chatId: string, query: string) => Promise<void>;
-  stopStreaming: () => void;
+  stopStreaming: (chatId?: string) => void;
   simplifyMessage: (chatId: string, messageId: string) => Promise<void>;
   submitFeedback: (messageId: string, rating: 'HELPFUL' | 'NOT_HELPFUL', comment?: string) => Promise<void>;
   clearError: () => void;
 }
 
-// Module-level refs for stream management
-let _activeReader: ReadableStreamDefaultReader<Uint8Array> | null = null;
-let _activeStreamChatId: string | null = null;
+// Module-level refs for concurrent stream management
+const _activeReaders = new Map<string, ReadableStreamDefaultReader<Uint8Array>>();
+const _chatStreamingMsgIds = new Map<string, string>(); // chatId -> streamingAssistantId
 
 // Background streams: tracks streaming state for chats the user navigated away from
 interface BackgroundStream {
@@ -83,6 +83,19 @@ const _backgroundStreams = new Map<string, BackgroundStream>();
 const _streamContent = new Map<string, string>(); // streamingMessageId -> accumulated text
 // Cache processingTimeMs for streams that complete while user is on a different chat
 const _completedStreamMeta = new Map<string, { streamMsgId: string; processingTimeMs?: number }>(); // chatId -> meta
+
+// Helper to save active chat to background streams if currently streaming
+const preserveActiveStream = (state: ChatState) => {
+  const active = state.activeChat;
+  if (!active) return;
+  if (state.isStreaming || state.streamingChatIds.includes(active.id)) {
+    const streamMsgId = _chatStreamingMsgIds.get(active.id) || state.streamingMessageId || '';
+    _backgroundStreams.set(active.id, {
+      messages: active.messages || [],
+      streamingMessageId: streamMsgId,
+    });
+  }
+};
 
 export const useChatStore = create<ChatState>()((set, get) => ({
   chats: [],
@@ -98,6 +111,11 @@ export const useChatStore = create<ChatState>()((set, get) => ({
   isGuestMode: false,
 
   fetchChats: async () => {
+    // Guest mode has no persisted chats — skip the API call entirely
+    if (get().isGuestMode) {
+      set({ chats: [], isLoadingChats: false });
+      return;
+    }
     set({ isLoadingChats: true });
     try {
       const data = await chatApi.list();
@@ -113,6 +131,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
   },
 
   createGuestChat: () => {
+    preserveActiveStream(get());
     const tempId = `guest-${Date.now()}`;
     const newChat: Chat = {
       id: tempId,
@@ -121,23 +140,36 @@ export const useChatStore = create<ChatState>()((set, get) => ({
       updatedAt: new Date().toISOString(),
       messages: [],
     };
-    set({
+    set((state) => ({
       isGuestMode: true,
       activeChat: newChat,
-      chats: [], // Guests have no history
-    });
+      chats: [newChat, ...state.chats.filter((c) => c.id !== tempId)],
+      isSending: false,
+      isStreaming: false,
+      streamingMessageId: null,
+    }));
     return tempId;
   },
 
   clearGuestChat: () => {
+    _backgroundStreams.clear();
+    _streamContent.clear();
+    _completedStreamMeta.clear();
+    _chatStreamingMsgIds.clear();
+    _activeReaders.clear();
     set({
       isGuestMode: false,
       activeChat: null,
       chats: [],
+      isSending: false,
+      isStreaming: false,
+      streamingMessageId: null,
+      streamingChatIds: [],
     });
   },
 
   createChat: async () => {
+    preserveActiveStream(get());
     const data = await chatApi.create();
     const newChat: Chat = {
       id: data.id,
@@ -149,66 +181,88 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     set((state) => ({
       chats: [newChat, ...state.chats],
       activeChat: newChat,
+      isSending: false,
+      isStreaming: false,
+      streamingMessageId: null,
     }));
     return data.id;
   },
 
   selectChat: async (chatId) => {
     const prev = get();
-    const prevChatId = prev.activeChat?.id;
-
-    // If switching away from a streaming chat, save its state for later restoration
-    if (prev.isStreaming && prevChatId && prevChatId !== chatId && prev.streamingMessageId) {
-      _backgroundStreams.set(prevChatId, {
-        messages: prev.activeChat?.messages || [],
-        streamingMessageId: prev.streamingMessageId,
-      });
-      // Reset UI streaming flags — streamingChatIds keeps the pulsating icon
-      set({ isSending: false, isStreaming: false, streamingMessageId: null });
+    if (prev.activeChat?.id === chatId && prev.activeChat) {
+      set((state) => ({
+        chats: state.chats.map((c) => (c.id === chatId ? { ...c, hasUnread: false } : c)),
+      }));
+      return;
     }
 
-    // Clear hasUnread for this chat
+    // Preserve the currently active stream before switching away
+    preserveActiveStream(prev);
+
+    // Clear hasUnread for the target chat
     set((state) => ({
-      chats: state.chats.map((c) => c.id === chatId ? { ...c, hasUnread: false } : c),
+      chats: state.chats.map((c) => (c.id === chatId ? { ...c, hasUnread: false } : c)),
+      isSending: false,
+      isStreaming: false,
+      streamingMessageId: null,
     }));
 
-    // If the stream reader is currently pumping for this chat (e.g. navigating from /chat/new),
-    // DON'T fetch from server — sendMessage already has activeChat set up correctly.
-    if (_activeStreamChatId === chatId && !_backgroundStreams.has(chatId)) {
-      // Restore full streaming state so the UI resumes properly
-      const currentStreamMsgId = Array.from(_streamContent.keys()).find((k) => k.startsWith('streaming-'));
+    // If the target chat is actively reading SSE tokens in the background, restore UI
+    if (_activeReaders.has(chatId) && !_backgroundStreams.has(chatId)) {
+      const currentStreamMsgId = _chatStreamingMsgIds.get(chatId) || null;
       set({
         isLoadingMessages: false,
         isSending: true,
         isStreaming: true,
-        streamingMessageId: currentStreamMsgId || get().streamingMessageId,
+        streamingMessageId: currentStreamMsgId,
       });
       return;
     }
 
-    // Check if we have a background stream for this chat — restore instead of fetching
+    // Check if we have a background stream snapshot for this chat
     const bg = _backgroundStreams.get(chatId);
     if (bg) {
       const latestContent = _streamContent.get(bg.streamingMessageId) || '';
       const restoredMessages = bg.messages.map((m) =>
-        m.id === bg.streamingMessageId ? { ...m, content: latestContent } : m,
+        m.id === bg.streamingMessageId ? { ...m, content: latestContent || m.content } : m,
       );
-      _backgroundStreams.delete(chatId);
 
+      const isStillStreaming = get().streamingChatIds.includes(chatId);
+
+      const existingChat = prev.chats.find((c) => c.id === chatId);
       const chat: Chat = {
         id: chatId,
-        title: prev.chats.find((c) => c.id === chatId)?.title || 'New Chat',
+        title: existingChat?.title || prev.activeChat?.title || 'New Chat',
         messagesCount: restoredMessages.length,
         updatedAt: new Date().toISOString(),
         messages: restoredMessages,
       };
+
       set({
         activeChat: chat,
         isLoadingMessages: false,
-        isSending: true,
-        isStreaming: true,
-        streamingMessageId: bg.streamingMessageId,
+        isSending: isStillStreaming,
+        isStreaming: isStillStreaming,
+        streamingMessageId: isStillStreaming ? bg.streamingMessageId : null,
       });
+      return;
+    }
+
+    // In Guest Mode, restore chat from state.chats
+    if (get().isGuestMode) {
+      const guestChat = get().chats.find((c) => c.id === chatId);
+      if (guestChat) {
+        set({
+          activeChat: guestChat,
+          isLoadingMessages: false,
+          isSending: false,
+          isStreaming: false,
+          streamingMessageId: null,
+        });
+      } else {
+        set({ isLoadingMessages: false });
+      }
       return;
     }
 
@@ -263,6 +317,8 @@ export const useChatStore = create<ChatState>()((set, get) => ({
       activeChat: state.activeChat?.id === chatId ? null : state.activeChat,
     }));
 
+    if (get().isGuestMode || chatId.startsWith('guest-')) return;
+
     try {
       await chatApi.delete(chatId);
     } catch (err) {
@@ -279,6 +335,9 @@ export const useChatStore = create<ChatState>()((set, get) => ({
       chats: state.chats.map((c) => (c.id === chatId ? { ...c, title } : c)),
       activeChat: state.activeChat?.id === chatId ? { ...state.activeChat, title } : state.activeChat,
     }));
+
+    if (get().isGuestMode || chatId.startsWith('guest-')) return;
+
     try {
       await chatApi.update(chatId, { title });
     } catch {
@@ -309,25 +368,31 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     const currentTitle = get().activeChat?.title;
     const isGenericTitle = !currentTitle || currentTitle === 'New Chat' || currentTitle === 'Untitled Chat';
 
-    // Mark this chat as having an active stream BEFORE the API call,
-    // so selectChat can detect it if the user navigates while we await.
-    _activeStreamChatId = chatId;
+    // Mark this chat as having an active stream BEFORE the API call
+    _chatStreamingMsgIds.set(chatId, streamingAssistantId);
 
     // Add user message to activeChat — create activeChat if it doesn't exist
     set((state) => {
       const existing = state.activeChat?.id === chatId ? state.activeChat : null;
+      const derivedTitle = isGuest && (!existing?.title || existing.title === 'Temporary Chat')
+        ? (query.length > 30 ? query.slice(0, 27) + '...' : query)
+        : (existing?.title || 'New Chat');
+
       const chat: Chat = existing
-        ? { ...existing, messages: [...(existing.messages || []), userMessage] }
-        : { id: chatId, title: 'New Chat', messagesCount: 1, updatedAt: new Date().toISOString(), messages: [userMessage] };
+        ? { ...existing, title: derivedTitle, messages: [...(existing.messages || []), userMessage] }
+        : { id: chatId, title: derivedTitle, messagesCount: 1, updatedAt: new Date().toISOString(), messages: [userMessage] };
+
       return {
         isSending: true,
         isStreaming: false,
         activeChat: chat,
+        chats: state.chats.some((c) => c.id === chatId)
+          ? state.chats.map((c) => (c.id === chatId ? { ...c, title: derivedTitle, messages: chat.messages } : c))
+          : [chat, ...state.chats],
       };
     });
 
     // Start title polling immediately for first messages
-    // (backend now fires generateTitle before the stream, so it arrives faster)
     if (isGenericTitle && !isGuest) {
       const pollForTitle = (attemptsLeft: number) => {
         if (attemptsLeft <= 0) return;
@@ -371,27 +436,37 @@ export const useChatStore = create<ChatState>()((set, get) => ({
 
       _streamContent.set(streamingAssistantId, '');
 
-      // Add the empty assistant message placeholder — always update activeChat
+      // Add the empty assistant message placeholder
       set((state) => {
         const isOnThisChat = state.activeChat?.id === chatId;
+        const updatedActive = isOnThisChat && state.activeChat
+          ? {
+              ...state.activeChat,
+              messages: [...(state.activeChat.messages || []), streamingAssistant],
+            }
+          : state.activeChat;
+
         return {
           isStreaming: isOnThisChat ? true : state.isStreaming,
           streamingMessageId: isOnThisChat ? streamingAssistantId : state.streamingMessageId,
           streamingChatIds: state.streamingChatIds.includes(chatId)
             ? state.streamingChatIds
             : [...state.streamingChatIds, chatId],
-          activeChat: isOnThisChat
-            ? {
-              ...state.activeChat!,
-              messages: [...(state.activeChat!.messages || []), streamingAssistant],
-            }
-            : state.activeChat,
+          activeChat: updatedActive,
+          chats: state.chats.map((c) =>
+            c.id === chatId
+              ? {
+                  ...c,
+                  messages: [...(c.messages || []), streamingAssistant],
+                }
+              : c
+          ),
         };
       });
 
-      // Parse SSE stream
+      // Parse SSE stream with per-chat reader tracking
       const reader = response.body.getReader();
-      _activeReader = reader; // Store ref so stopStreaming can cancel
+      _activeReaders.set(chatId, reader);
       const decoder = new TextDecoder();
       let buffer = '';
       let accumulatedContent = '';
@@ -407,7 +482,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
 
           // Process complete SSE events (separated by double newline)
           const events = buffer.split('\n\n');
-          buffer = events.pop() || ''; // Keep incomplete last event in buffer
+          buffer = events.pop() || '';
 
           for (const eventBlock of events) {
             if (!eventBlock.trim()) continue;
@@ -440,7 +515,6 @@ export const useChatStore = create<ChatState>()((set, get) => ({
 
               case 'metadata':
                 metadata = parsed;
-                // Only update UI if user is still viewing this chat
                 if (get().activeChat?.id === chatId) {
                   set((state) => ({
                     activeChat: state.activeChat?.id === chatId
@@ -465,9 +539,8 @@ export const useChatStore = create<ChatState>()((set, get) => ({
 
               case 'token':
                 accumulatedContent += (parsed.text as string) || '';
-                // Always track in _streamContent for background restore
                 _streamContent.set(streamingAssistantId, accumulatedContent);
-                // Update UI if user is viewing this chat
+
                 if (get().activeChat?.id === chatId) {
                   set((state) => ({
                     activeChat: state.activeChat?.id === chatId
@@ -481,20 +554,78 @@ export const useChatStore = create<ChatState>()((set, get) => ({
                       }
                       : state.activeChat,
                   }));
-                } else {
-                  // Update background stream messages snapshot
-                  const bgEntry = _backgroundStreams.get(chatId);
-                  if (bgEntry) {
-                    bgEntry.messages = bgEntry.messages.map((m) =>
-                      m.id === streamingAssistantId ? { ...m, content: accumulatedContent } : m,
-                    );
-                  }
+                }
+
+                // Update background stream entry if present
+                const bgTokenEntry = _backgroundStreams.get(chatId);
+                if (bgTokenEntry) {
+                  bgTokenEntry.messages = bgTokenEntry.messages.map((m) =>
+                    m.id === streamingAssistantId ? { ...m, content: accumulatedContent } : m,
+                  );
+                }
+
+                // Update chats array in store (for guest mode & sidebar)
+                if (get().isGuestMode) {
+                  set((state) => ({
+                    chats: state.chats.map((c) =>
+                      c.id === chatId
+                        ? {
+                          ...c,
+                          messages: (c.messages || []).map((m) =>
+                            m.id === streamingAssistantId ? { ...m, content: accumulatedContent } : m,
+                          ),
+                        }
+                        : c
+                    ),
+                  }));
                 }
                 break;
 
               case 'done': {
                 const finalContent = accumulatedContent || (parsed.answer_translated as string) || (parsed.answer as string) || '';
                 const ptMs = parsed.processing_time_ms as number | undefined;
+
+                const finalAssistantMessage: Message = {
+                  id: streamingAssistantId,
+                  role: 'assistant',
+                  content: finalContent,
+                  createdAt: new Date().toISOString(),
+                  processingTimeMs: ptMs,
+                  references: (metadata.references as Message['references']) || undefined,
+                  helplines: (metadata.helplines as Message['helplines']) || undefined,
+                  ipcBnsNote: (metadata.ipc_bns_note as string) || undefined,
+                  confidenceScore: (metadata.confidence_score as number) || undefined,
+                };
+
+                // Update background stream entry if present
+                const bgDoneEntry = _backgroundStreams.get(chatId);
+                if (bgDoneEntry) {
+                  bgDoneEntry.messages = bgDoneEntry.messages.map((m) =>
+                    m.id === streamingAssistantId ? finalAssistantMessage : m,
+                  );
+                }
+
+                // Always update state.chats with the final message
+                set((state) => ({
+                  chats: state.chats.map((c) => {
+                    if (c.id === chatId) {
+                      const msgs = c.messages || [];
+                      const exists = msgs.some((m) => m.id === streamingAssistantId);
+                      const updatedMsgs = exists
+                        ? msgs.map((m) => (m.id === streamingAssistantId ? finalAssistantMessage : m))
+                        : [...msgs, finalAssistantMessage];
+                      return {
+                        ...c,
+                        messages: updatedMsgs,
+                        messagesCount: updatedMsgs.length,
+                        lastMessage: finalContent.slice(0, 100),
+                        updatedAt: new Date().toISOString(),
+                      };
+                    }
+                    return c;
+                  }),
+                }));
+
                 const isStillOnChat = get().activeChat?.id === chatId;
                 if (isStillOnChat) {
                   set((state) => ({
@@ -505,24 +636,12 @@ export const useChatStore = create<ChatState>()((set, get) => ({
                       ? {
                         ...state.activeChat,
                         messages: (state.activeChat.messages || []).map((m) =>
-                          m.id === streamingAssistantId
-                            ? { ...m, content: finalContent, processingTimeMs: ptMs }
-                            : m,
+                          m.id === streamingAssistantId ? finalAssistantMessage : m,
                         ),
                       }
                       : state.activeChat,
                   }));
                 } else {
-                  // Stream finished in background — update _backgroundStreams if present
-                  const bgEntry = _backgroundStreams.get(chatId);
-                  if (bgEntry) {
-                    bgEntry.messages = bgEntry.messages.map((m) =>
-                      m.id === streamingAssistantId
-                        ? { ...m, content: finalContent, processingTimeMs: ptMs }
-                        : m,
-                    );
-                  }
-                  // Cache meta for later retrieval when user switches back
                   _completedStreamMeta.set(chatId, { streamMsgId: streamingAssistantId, processingTimeMs: ptMs });
                 }
                 break;
@@ -575,22 +694,20 @@ export const useChatStore = create<ChatState>()((set, get) => ({
           }
         }
       } catch (readErr: any) {
-        // reader.cancel() throws — this is expected when user stops streaming
         if (readErr?.message?.includes('cancel') || readErr?.name === 'AbortError') {
           wasCancelled = true;
         } else {
           throw readErr;
         }
       } finally {
-        _activeReader = null;
+        _activeReaders.delete(chatId);
+        _chatStreamingMsgIds.delete(chatId);
       }
 
       // If cancelled by user, keep accumulated content as the final message
       if (wasCancelled) {
         _streamContent.delete(streamingAssistantId);
         _backgroundStreams.delete(chatId);
-        _activeStreamChatId = null;
-        // Always clear streaming state — even if user navigated away
         set((state) => ({
           isSending: state.activeChat?.id === chatId ? false : state.isSending,
           isStreaming: state.activeChat?.id === chatId ? false : state.isStreaming,
@@ -603,16 +720,12 @@ export const useChatStore = create<ChatState>()((set, get) => ({
       // Clean up tracking
       _streamContent.delete(streamingAssistantId);
       _backgroundStreams.delete(chatId);
-      _activeStreamChatId = null;
 
       const isStillOnThisChat = get().activeChat?.id === chatId;
       if (isStillOnThisChat) {
         set((state) => ({ isSending: false, isStreaming: false, streamingMessageId: null, streamingChatIds: state.streamingChatIds.filter((id) => id !== chatId) }));
 
         if (!isGuest) {
-          // Re-fetch the chat from the server to replace temporary message IDs
-          // (streaming-*) with real database UUIDs. Without this, operations like
-          // "Simplify" fail because the backend can't find the temp ID in the DB.
           try {
             const data = await chatApi.get(chatId);
             const serverMessages = (data.messages || []).map((m: Record<string, unknown>) => ({
@@ -620,11 +733,8 @@ export const useChatStore = create<ChatState>()((set, get) => ({
               role: typeof m.role === 'string' ? m.role.toLowerCase() : m.role,
             }));
 
-            // Preserve client-only fields (processingTimeMs, confidenceScore) that
-            // the DB doesn't store — merge them from the current activeChat messages.
             const currentMessages = get().activeChat?.messages || [];
             const mergedMessages = serverMessages.map((sm: Message, idx: number) => {
-              // Match by position: the last messages align between client & server
               const clientMsg = currentMessages[idx];
               if (clientMsg && sm.role === clientMsg.role) {
                 return {
@@ -642,16 +752,14 @@ export const useChatStore = create<ChatState>()((set, get) => ({
                 : state.activeChat,
             }));
           } catch {
-            // Non-critical: simplify may fail later, but the chat still works
+            // Non-critical
           }
         }
       } else {
-        // Stream finished in the background — mark unread + dispatch event for toast
         set((state) => ({
           streamingChatIds: state.streamingChatIds.filter((id) => id !== chatId),
           chats: state.chats.map((c) => c.id === chatId ? { ...c, hasUnread: true } : c),
         }));
-        // Dispatch a custom event so a React component can show a localized toast
         if (typeof window !== 'undefined') {
           const chatTitle = get().chats.find((c) => c.id === chatId)?.title || 'Chat';
           window.dispatchEvent(new CustomEvent('pocketjury:bg-stream-done', {
@@ -661,16 +769,15 @@ export const useChatStore = create<ChatState>()((set, get) => ({
       }
 
     } catch (err: any) {
-      _activeStreamChatId = null;
       _streamContent.delete(streamingAssistantId);
       _backgroundStreams.delete(chatId);
+      _chatStreamingMsgIds.delete(chatId);
+      _activeReaders.delete(chatId);
 
-      // Always clear streaming indicator for this chat
       set((state) => ({
         streamingChatIds: state.streamingChatIds.filter((id) => id !== chatId),
       }));
 
-      // Only update UI error state if we're still on the same chat
       if (get().activeChat?.id !== chatId) return;
 
       let errorMessage = 'Assistant unavailable at the moment.';
@@ -694,7 +801,9 @@ export const useChatStore = create<ChatState>()((set, get) => ({
         createdAt: new Date().toISOString(),
       };
 
-      chatApi.createSystemMessage(chatId, errorAssistantMessage.content).catch(console.error);
+      if (!isGuest && !chatId.startsWith('guest-')) {
+        chatApi.createSystemMessage(chatId, errorAssistantMessage.content).catch(console.error);
+      }
 
       set((state) => {
         const messages = (state.activeChat?.messages || []).filter(
@@ -716,20 +825,23 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     }
   },
 
-  stopStreaming: () => {
-    // Cancel the active stream reader only for the current chat
-    if (_activeReader && _activeStreamChatId === get().activeChat?.id) {
-      _activeReader.cancel().catch(() => {});
-      _activeReader = null;
-      _activeStreamChatId = null;
+  stopStreaming: (chatId?: string) => {
+    const targetChatId = chatId || get().activeChat?.id;
+    if (targetChatId) {
+      const reader = _activeReaders.get(targetChatId);
+      if (reader) {
+        reader.cancel().catch(() => {});
+        _activeReaders.delete(targetChatId);
+      }
+      _chatStreamingMsgIds.delete(targetChatId);
     }
     const currentChatId = get().activeChat?.id;
     set((state) => ({
-      isSending: false,
-      isStreaming: false,
-      streamingMessageId: null,
-      streamingChatIds: currentChatId
-        ? state.streamingChatIds.filter((id) => id !== currentChatId)
+      isSending: targetChatId === currentChatId ? false : state.isSending,
+      isStreaming: targetChatId === currentChatId ? false : state.isStreaming,
+      streamingMessageId: targetChatId === currentChatId ? null : state.streamingMessageId,
+      streamingChatIds: targetChatId
+        ? state.streamingChatIds.filter((id) => id !== targetChatId)
         : state.streamingChatIds,
     }));
   },
@@ -829,20 +941,22 @@ export const useChatStore = create<ChatState>()((set, get) => ({
         }
       }
 
-      // Re-fetch the full chat to get real DB IDs and authoritative state
-      try {
-        const data = await chatApi.get(chatId);
-        const normalizedMessages = (data.messages || []).map((m: Record<string, unknown>) => ({
-          ...m,
-          role: typeof m.role === 'string' ? m.role.toLowerCase() : m.role,
-        }));
-        set((state) => ({
-          activeChat: state.activeChat?.id === chatId
-            ? { ...state.activeChat, messages: normalizedMessages }
-            : state.activeChat,
-        }));
-      } catch {
-        // Non-critical — the streamed content is already visible
+      // Re-fetch the full chat to get real DB IDs and authoritative state (authenticated users only)
+      if (!get().isGuestMode && !chatId.startsWith('guest-')) {
+        try {
+          const data = await chatApi.get(chatId);
+          const normalizedMessages = (data.messages || []).map((m: Record<string, unknown>) => ({
+            ...m,
+            role: typeof m.role === 'string' ? m.role.toLowerCase() : m.role,
+          }));
+          set((state) => ({
+            activeChat: state.activeChat?.id === chatId
+              ? { ...state.activeChat, messages: normalizedMessages }
+              : state.activeChat,
+          }));
+        } catch {
+          // Non-critical — the streamed content is already visible
+        }
       }
     } catch (error) {
       console.error('Failed to simplify message:', error);
@@ -858,6 +972,20 @@ export const useChatStore = create<ChatState>()((set, get) => ({
   },
 
   submitFeedback: async (messageId, rating, comment) => {
+    if (get().isGuestMode || messageId.startsWith('temp-') || messageId.startsWith('error-')) {
+      set((state) => ({
+        activeChat: state.activeChat
+          ? {
+            ...state.activeChat,
+            messages: state.activeChat.messages?.map((m) =>
+              m.id === messageId ? { ...m, feedbackRating: rating } : m,
+            ),
+          }
+          : state.activeChat,
+      }));
+      return;
+    }
+
     await feedbackApi.submit({ messageId, rating, comment });
     set((state) => ({
       activeChat: state.activeChat

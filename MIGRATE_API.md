@@ -69,7 +69,7 @@ As long as these methods return a plain `str`, the rest of the 13-stage RAG pipe
 ## 2. Current Setup (OpenRouter)
 
 **Provider**: OpenRouter  
-**Model**: `gpt-oss-120b:free`  
+**Model**: `nvidia/nemotron-3-ultra-550b-a55b:free`  
 **SDK**: `openai` (with custom `base_url`)
 
 OpenRouter is a unified API gateway that provides access to hundreds of models from OpenAI, Anthropic, Google, Meta, and others through a single OpenAI-compatible endpoint. It supports free-tier models, making it ideal for development and prototyping.
@@ -77,7 +77,7 @@ OpenRouter is a unified API gateway that provides access to hundreds of models f
 ### config.py (current)
 ```python
 OPENROUTER_API_KEY: str = ""
-LLM_MODEL_ID: str = "gpt-oss-120b:free"
+LLM_MODEL_ID: str = "nvidia/nemotron-3-ultra-550b-a55b:free"
 LLM_TEMPERATURE: float = 0.1
 LLM_MAX_TOKENS: int = 2048
 ```

@@ -32,7 +32,7 @@ export const metadata: Metadata = {
     'DLSA',
     'legal rights India',
   ],
-  manifest: '/manifest.webmanifest',
+  manifest: '/manifest.json',
   icons: {
     icon: '/icon.svg',
     apple: '/apple-touch-icon.png',

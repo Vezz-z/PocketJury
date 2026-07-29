@@ -11,9 +11,12 @@ import { Scale, CheckCircle, XCircle, Loader2 } from 'lucide-react';
 import { useAuthStore } from '@/store';
 import { toast } from 'sonner';
 
+import { useTranslations } from 'next-intl';
+
 type VerifyState = 'loading' | 'success' | 'error';
 
 export default function VerifyMagicPage() {
+  const t = useTranslations('auth');
   const searchParams = useSearchParams();
   const router = useRouter();
   const [state, setState] = useState<VerifyState>('loading');
@@ -32,7 +35,7 @@ export default function VerifyMagicPage() {
 
     if (!token) {
       setState('error');
-      setErrorMessage('No token found in the URL.');
+      setErrorMessage(t('verifyMagicError'));
       return;
     }
 
@@ -51,14 +54,14 @@ export default function VerifyMagicPage() {
 
         if (!response.ok) {
           setState('error');
-          setErrorMessage(data.error || 'Verification failed. The link may have expired.');
+          setErrorMessage(t('verifyMagicError'));
           return;
         }
 
         // Set auth state
         useAuthStore.getState().fetchProfile?.();
         setState('success');
-        toast.success('Logged in successfully!');
+        toast.success(t('verifyMagicSuccess'));
 
         // Redirect after short delay
         setTimeout(() => {
@@ -66,12 +69,12 @@ export default function VerifyMagicPage() {
         }, 1500);
       } catch {
         setState('error');
-        setErrorMessage('Something went wrong. Please try again.');
+        setErrorMessage(t('verifyMagicError'));
       }
     };
 
     verifyToken();
-  }, [searchParams, router, API_BASE]);
+  }, [searchParams, router, API_BASE, t]);
 
   return (
     <div className="min-h-screen flex items-center justify-center px-4 bg-gradient-to-br from-primary-50 via-[var(--color-bg)] to-secondary-50 dark:from-blue-950/20 dark:via-[var(--color-bg)] dark:to-green-950/10">

@@ -103,7 +103,7 @@ export default function RegisterPage() {
       // Always show verification — the backend sends a code on register
       setVerificationRequired(true);
       setResendTimer(30);
-      toast.info(t('verificationSent') || 'Verification code sent to your email');
+      toast.info(t('verificationSentNotice'));
     } catch (err) {
       const message = err instanceof Error ? err.message : t('registerError');
       toast.error(message);
@@ -125,7 +125,7 @@ export default function RegisterPage() {
       // Expected — re-register may fail but backend still sends a new code
     }
     setResendTimer(30);
-    toast.info(t('verificationSent') || 'Verification code re-sent');
+    toast.info(t('verificationResentNotice'));
   };
 
   const onVerifySubmit = async (data: VerifyForm) => {
@@ -134,7 +134,7 @@ export default function RegisterPage() {
       toast.success(t('registerSuccess'));
       router.push('/onboarding');
     } catch {
-      toast.error(t('mfaError') || 'Invalid verification code');
+      toast.error(t('mfaError'));
     }
   };
 
@@ -192,9 +192,12 @@ export default function RegisterPage() {
 
           {verificationRequired ? (
             <form onSubmit={handleVerifySubmit(onVerifySubmit)} className="space-y-4">
+              <p className="text-xs text-muted italic mt-1 p-2 rounded-lg bg-elevated border border-[var(--color-border)]">
+                {t('checkSpamFolderNotice')}
+              </p>
               <div>
                 <label htmlFor="code" className="block text-sm font-medium text-heading mb-1">
-                  {t('verificationCode') || '6-Digit Verification Code'}
+                  {t('verificationCode')}
                 </label>
                 <input
                   id="code"
@@ -219,10 +222,10 @@ export default function RegisterPage() {
                 {isLoading ? (
                   <span className="flex items-center justify-center gap-2">
                     <span className="h-4 w-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                    {t('verifying') || 'Verifying...'}
+                    {t('verifying')}
                   </span>
                 ) : (
-                  t('verifyButton') || 'Verify Email'
+                  t('verifyButton')
                 )}
               </button>
               <button

@@ -25,7 +25,12 @@ export default function NewChatPage() {
   // Clear activeChat so the store knows we're not viewing any chat
   // (important for background stream toast/unread detection)
   useEffect(() => {
-    useChatStore.setState({ activeChat: null });
+    const store = useChatStore.getState();
+    if (store.activeChat && (store.isStreaming || store.streamingChatIds.includes(store.activeChat.id))) {
+      store.selectChat('');
+    } else {
+      useChatStore.setState({ activeChat: null });
+    }
   }, []);
 
   const handleSend = async (query: string) => {
@@ -34,7 +39,6 @@ export default function NewChatPage() {
     setIsCreating(true);
 
     try {
-      const isGuest = useChatStore.getState().isGuestMode;
       let newChatId: string;
 
       if (!useAuthStore.getState().isAuthenticated) {

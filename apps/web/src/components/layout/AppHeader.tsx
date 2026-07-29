@@ -62,17 +62,22 @@ export function AppHeader() {
     router.push('/en/login');
   };
 
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+
   const handleLanguageChange = async (code: string) => {
     setLangOpen(false);
     try {
-      await updateLanguage(code);
+      // Only persist language to server for authenticated users
+      if (isAuthenticated) {
+        await updateLanguage(code);
+      }
       // Replace locale segment in current path
       const segments = pathname.split('/');
       segments[1] = code;
       router.push(segments.join('/'));
       router.refresh();
     } catch {
-      toast.error('Failed to update language');
+      toast.error(tCommon('failedToUpdateLanguage'));
     }
   };
 

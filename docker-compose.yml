@@ -94,7 +94,8 @@ services:
       DATABASE_URL: postgresql+asyncpg://pocketjury:${POSTGRES_PASSWORD:-pocketjury_dev_2024}@postgres:5432/pocketjury
       REDIS_URL: redis://redis:6379
       OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
-      LLM_MODEL_ID: ${LLM_MODEL_ID:-gpt-oss-120b:free}
+      LLM_MODEL_ID: ${LLM_MODEL_ID:-}
+      TITLE_LLM_MODEL_ID: ${TITLE_LLM_MODEL_ID:-}
       LEGAL_EMBEDDING_MODEL: ${LEGAL_EMBEDDING_MODEL:-intfloat/multilingual-e5-large}
       QUERY_EMBEDDING_MODEL: ${QUERY_EMBEDDING_MODEL:-intfloat/multilingual-e5-large}
       HF_HOME: /app/model_cache

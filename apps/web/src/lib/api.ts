@@ -19,6 +19,37 @@ class ApiError extends Error {
 
 let isRefreshing = false;
 
+/**
+ * Unauthenticated fetch — no cookies, no token refresh.
+ * Used exclusively for guest endpoints.
+ */
+async function fetchClient(url: string, options: FetchOptions = {}): Promise<Response> {
+  const { timeout = 30000, ...fetchOptions } = options;
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeout);
+
+  try {
+    const response = await fetch(`${API_BASE}${url}`, {
+      ...fetchOptions,
+      signal: controller.signal,
+      headers: {
+        'Content-Type': 'application/json',
+        ...fetchOptions.headers,
+      },
+    });
+
+    if (!response.ok) {
+      const data = await response.json().catch(() => null);
+      throw new ApiError(response.status, response.statusText, data);
+    }
+
+    return response;
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
 async function fetchWithAuth(url: string, options: FetchOptions = {}, _isRetry = false): Promise<Response> {
   const { timeout = 30000, ...fetchOptions } = options;
 
@@ -171,7 +202,7 @@ export const chatApi = {
    * Does not use authentication.
    */
   guestSendMessageStream: (query: string, languageCode: string, history: any[]) =>
-    fetchWithAuth('/chats/guest/stream', {
+    fetchClient('/chats/guest/stream', {
       method: 'POST',
       body: JSON.stringify({ content: query, languageCode, history }),
       timeout: 180000,

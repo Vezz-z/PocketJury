@@ -255,6 +255,9 @@ export default function LoginPage() {
                   <p className="text-sm text-body">
                     {t('otpSentMessage')}
                   </p>
+                  <p className="text-xs text-muted italic mt-2 p-2 rounded-lg bg-elevated border border-[var(--color-border)]">
+                    {t('checkSpamFolderNotice')}
+                  </p>
                   {editingEmail ? (
                     <div className="mt-2 flex items-center gap-2">
                       <input
@@ -468,8 +471,8 @@ export default function LoginPage() {
             <Link href="/legal-sources" target="_blank" rel="noopener noreferrer" className="hover:text-primary-600 dark:hover:text-blue-400 underline transition-colors">
               {t('legalSourcesLink')}
             </Link>
-            <a href="mailto:pocketjuryai@gmail.com" className="hover:text-primary-600 dark:hover:text-blue-400 underline transition-colors">
-              {t('common.contactUs') || 'Contact Us'}
+            <a href="mailto:reply.to.pocketjuryai@gmail.com" className="hover:text-primary-600 dark:hover:text-blue-400 underline transition-colors">
+              {t('contactUs')}
             </a>
           </div>
         </div>

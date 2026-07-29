@@ -18,6 +18,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   const desktopSidebarOpen = useUIStore((s) => s.desktopSidebarOpen);
   const [isChecking, setIsChecking] = useState(true);
   const [hydrated, setHydrated] = useState(false);
+  const [isGuestChat, setIsGuestChat] = useState(false);
 
   // Wait for Zustand to hydrate from localStorage before checking auth
   useEffect(() => {
@@ -33,6 +34,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
       const currentPath = window.location.pathname;
       // Allow unauthenticated access to chat routes (Guest Mode)
       if (currentPath.match(/^\/[^/]+\/chat(\/|$)/)) {
+        setIsGuestChat(true);
         setIsChecking(false);
         return;
       }
@@ -71,7 +73,9 @@ export default function AppLayout({ children }: { children: ReactNode }) {
       .finally(() => setIsChecking(false));
   }, [hydrated, isAuthenticated, router, fetchProfile]);
 
-  if (!hydrated || !isAuthenticated || isChecking) return null;
+  // Show nothing while checking auth — but allow guest chat routes through
+  if (!hydrated || isChecking) return null;
+  if (!isAuthenticated && !isGuestChat) return null;
 
   return (
     <div className="flex h-screen bg-page overflow-hidden">

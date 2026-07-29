@@ -63,8 +63,8 @@ export function MessageInput({ onSend, onStop, disabled, isStreaming }: MessageI
         <button
           className="h-[44px] w-[44px] flex items-center justify-center p-0 rounded-lg bg-red-500 hover:bg-red-600 text-white transition-colors"
           onClick={onStop}
-          aria-label={t('stop') || 'Stop generating'}
-          title={t('stop') || 'Stop generating'}
+          aria-label={t('stopGenerating')}
+          title={t('stopGenerating')}
         >
           <Square className="h-4 w-4 fill-current" />
         </button>

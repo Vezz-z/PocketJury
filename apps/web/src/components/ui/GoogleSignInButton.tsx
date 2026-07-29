@@ -221,11 +221,11 @@ export function GoogleSignInButton({
           className="btn-outline w-full py-2.5 disabled:opacity-50 disabled:cursor-not-allowed"
           onClick={() => {
             if (!GOOGLE_CLIENT_ID) {
-              toast.error('Google Sign-In is not configured');
+              toast.error(t('googleNotConfigured'));
               return;
             }
             if (gsiError) {
-              toast.error('Failed to load Google Sign-In. Please refresh.');
+              toast.error(t('googleLoadError'));
               return;
             }
           }}
@@ -256,9 +256,9 @@ export function GoogleSignInButton({
                 />
               </svg>
               {gsiError
-                ? t('googleAuthUnavailable') || 'Google Sign-In unavailable'
+                ? t('googleAuthUnavailable')
                 : !GOOGLE_CLIENT_ID
-                  ? t('googleAuthNotConfigured') || 'Google Sign-In not configured'
+                  ? t('googleAuthNotConfigured')
                   : mode === 'signup' ? t('signupWithGoogle') : t('continueWithGoogle')}
             </>
           )}
