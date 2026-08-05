@@ -149,7 +149,10 @@
     "verifyMagicSuccess": "Logged in successfully!",
     "verifyMagicError": "Verification failed. The link may have expired or is invalid.",
     "googleNotConfigured": "Google Sign-In is not configured",
-    "googleLoadError": "Failed to load Google Sign-In. Please refresh."
+    "googleLoadError": "Failed to load Google Sign-In. Please refresh.",
+    "emailSentTo": "An email has been sent to your mail {email}",
+    "wrongEmailAddress": "Wrong email address?",
+    "edit": "Edit"
   },
   "onboarding": {
     "title": "Let's personalize your experience",
@@ -318,7 +321,8 @@
       "light": "Light",
       "dark": "Dark",
       "system": "System"
-    }
+    },
+    "contactUs": "Contact Us"
   },
   "dlsa": {
     "title": "Free Legal Aid",

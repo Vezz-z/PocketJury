@@ -3,7 +3,7 @@
 // ==============================================================================
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useTranslations } from 'next-intl';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -11,8 +11,9 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { motion } from 'framer-motion';
-import { Scale, Mail, Lock, Eye, EyeOff, AlertCircle, Check, User } from 'lucide-react';
+import { Scale, Mail, Lock, Eye, EyeOff, AlertCircle, Check, User, Pencil } from 'lucide-react';
 import { useAuthStore } from '@/store';
+import { authApi } from '@/lib/api';
 import { toast } from 'sonner';
 import { ThemeToggle } from '@/components/ui/ThemeToggle';
 import { LanguageSwitcher } from '@/components/ui/LanguageSwitcher';
@@ -68,6 +69,8 @@ export default function RegisterPage() {
   const [userEmail, setUserEmail] = useState('');
   const [showSessionModal, setShowSessionModal] = useState(false);
   const [resendTimer, setResendTimer] = useState(0);
+  const [highlightEmail, setHighlightEmail] = useState(false);
+  const emailInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     // Only show session modal if already authenticated AND not in the middle of registration
@@ -89,6 +92,7 @@ export default function RegisterPage() {
   const {
     register: registerVerify,
     handleSubmit: handleVerifySubmit,
+    reset: resetVerify,
     formState: { errors: verifyErrors },
   } = useForm<VerifyForm>({
     resolver: zodResolver(verifySchema),
@@ -108,6 +112,23 @@ export default function RegisterPage() {
       const message = err instanceof Error ? err.message : t('registerError');
       toast.error(message);
     }
+  };
+
+  const handleEditEmail = async () => {
+    try {
+      await authApi.cancelOtp(userEmail);
+    } catch {
+      // Ignore if no active OTP
+    }
+    setVerificationRequired(false);
+    setHighlightEmail(true);
+    resetVerify({ code: '' });
+    setTimeout(() => {
+      if (emailInputRef.current) {
+        emailInputRef.current.focus();
+        emailInputRef.current.select();
+      }
+    }, 100);
   };
 
   // Resend timer countdown
@@ -192,7 +213,28 @@ export default function RegisterPage() {
 
           {verificationRequired ? (
             <form onSubmit={handleVerifySubmit(onVerifySubmit)} className="space-y-4">
-              <p className="text-xs text-muted italic mt-1 p-2 rounded-lg bg-elevated border border-[var(--color-border)]">
+              {/* Sent info banner with edit button */}
+              <div className="p-3 rounded-lg bg-primary-50/70 dark:bg-blue-950/40 border border-primary-100 dark:border-blue-900/50 space-y-2">
+                <div className="flex items-start gap-2">
+                  <Mail className="h-4 w-4 text-primary-600 dark:text-blue-400 flex-shrink-0 mt-0.5" />
+                  <p className="text-xs text-heading leading-relaxed">
+                    {t('emailSentTo', { email: userEmail })}
+                  </p>
+                </div>
+                <div className="flex items-center justify-between text-xs pt-2 border-t border-primary-200/50 dark:border-blue-900/30">
+                  <span className="text-muted">{t('wrongEmailAddress')}</span>
+                  <button
+                    type="button"
+                    onClick={handleEditEmail}
+                    className="inline-flex items-center gap-1 font-semibold text-primary-600 dark:text-blue-400 hover:underline cursor-pointer"
+                  >
+                    <Pencil className="h-3 w-3" />
+                    {t('edit')}
+                  </button>
+                </div>
+              </div>
+
+              <p className="text-xs text-muted italic p-2 rounded-lg bg-elevated border border-[var(--color-border)]">
                 {t('checkSpamFolderNotice')}
               </p>
               <div>
@@ -296,9 +338,18 @@ export default function RegisterPage() {
                   id="email"
                   type="email"
                   autoComplete="email"
-                  className="input pl-10"
+                  className={`input pl-10 transition-all ${
+                    highlightEmail ? 'ring-2 ring-amber-500 border-amber-500 dark:ring-amber-400' : ''
+                  }`}
                   placeholder={t('emailPlaceholder')}
                   {...register('email')}
+                  ref={(e) => {
+                    register('email').ref(e);
+                    emailInputRef.current = e;
+                  }}
+                  onFocus={() => {
+                    if (highlightEmail) setHighlightEmail(false);
+                  }}
                 />
               </div>
               {errors.email && (
