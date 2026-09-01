@@ -124,7 +124,7 @@ ollama run llama3.1:8b "What are fundamental rights in India?"
 
 ## 5. Modify PocketJury for Ollama
 
-Since our current provider is OpenRouter (nvidia/nemotron-3-ultra-550b-a55b:free), switching to Ollama requires changing config.py and llm_client.py to use the OpenAI-compatible API (Ollama supports it natively).
+Since our current provider is OpenRouter (openai/gpt-oss-120b or nvidia/nemotron-3-ultra-550b-a55b:free), switching to Ollama requires changing config.py and llm_client.py to use the OpenAI-compatible API (Ollama supports it natively).
 
 ### Step 1: Update `config.py`
 
@@ -1076,7 +1076,7 @@ asyncio.run(evaluate())
 ## 11. Future: Latency Optimisation with Local LLM
 
 > **Status:** Not yet implemented. This section documents strategies for reducing
-> response latency when migrating from OpenRouter (`nvidia/nemotron-3-ultra-550b-a55b:free`) to a local
+> response latency when migrating from OpenRouter (`openai/gpt-oss-120b` or `nvidia/nemotron-3-ultra-550b-a55b:free`) to a local
 > LLM via Ollama. These techniques complement the SSE streaming already implemented
 > in the current pipeline.
 

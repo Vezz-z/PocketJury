@@ -64,7 +64,7 @@ class RAGPipeline:
     7.  Hybrid retrieval (vector + full-text + RRF)
     8.  Re-ranking & deduplication
     9.  Prompt assembly with persona adaptation
-    10. LLM generation (OpenRouter — nvidia/nemotron-3-ultra-550b-a55b:free)
+    10. LLM generation (OpenRouter — openai/gpt-oss-120b or nvidia/nemotron-3-ultra-550b-a55b:free)
     11. Output safety validation
     12. IPC→BNS cross-reference injection
     13. Translation back to user language & response formatting

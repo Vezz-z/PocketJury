@@ -120,7 +120,7 @@ AI_SERVICE_URL=http://ai:8000
 # 1. Go to https://openrouter.ai/keys and create an account
 # 2. Generate a free API Key and paste it below:
 OPENROUTER_API_KEY=sk-or-v1-xxxxxxxxxxxxxxxxxxxxxxxxx
-LLM_MODEL_ID=nvidia/nemotron-3-ultra-550b-a55b:free
+LLM_MODEL_ID=openai/gpt-oss-120b # nvidia/nemotron-3-ultra-550b-a55b:free
 
 # (NOTE: If you want to use Local Ollama instead of OpenRouter, comment out OPENROUTER_API_KEY and uncomment the block below. Read LLM.md for details!)
 # OLLAMA_BASE_URL=http://host.docker.internal:11434/v1

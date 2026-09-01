@@ -33,7 +33,7 @@ FALLBACK_MODELS = [
 class LLMClient:
     """Client for OpenRouter API (OpenAI-compatible endpoint).
 
-    Uses the model configured via ``LLM_MODEL_ID`` (default: nvidia/nemotron-3-ultra-550b-a55b:free).
+    Uses the model configured via ``LLM_MODEL_ID`` (default: openai/gpt-oss-120b or nvidia/nemotron-3-ultra-550b-a55b:free).
     Supports both standard (blocking) and streaming generation.
     """
 

@@ -26,7 +26,7 @@ class Settings(BaseSettings):
 
     # --- OpenRouter API (LLM) ---
     OPENROUTER_API_KEY: str = ""
-    LLM_MODEL_ID: str = "nvidia/nemotron-3-ultra-550b-a55b:free"
+    LLM_MODEL_ID: str = "openai/gpt-oss-120b" # "nvidia/nemotron-3-ultra-550b-a55b:free"
     TITLE_LLM_MODEL_ID: str | None = None
     LLM_TEMPERATURE: float = 0.7
     LLM_MAX_TOKENS: int = 4096

@@ -20,7 +20,7 @@ PocketJury has been built from the ground up as an offline-capable, highly secur
 - **Password Security & Recovery:** Added Change Password functionality in Settings, inline Forgot Password links on login, and single-use password reset flows.
 
 ### 3. Upgraded AI Engine: NVIDIA Nemotron 3 Ultra 550B & Multi-Model Fallbacks
-- **Primary Model Upgrade:** Default LLM updated to `nvidia/nemotron-3-ultra-550b-a55b:free` via OpenRouter for legal reasoning and multilingual clarity.
+- **Primary Model Upgrade:** Default LLM updated to `openai/gpt-oss-120b` or `nvidia/nemotron-3-ultra-550b-a55b:free` via OpenRouter for legal reasoning and multilingual clarity.
 - **Automatic Fallback Resiliency:** Implemented automatic model failover inside `LLMClient`. If an upstream free model slug becomes retired or unavailable (404/RateLimit), the pipeline transparently fails over to:
   1. `nvidia/nemotron-3-super-120b-a12b:free`
   2. `nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free`
